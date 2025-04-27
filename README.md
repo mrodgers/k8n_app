@@ -1,6 +1,6 @@
-# Research System - Kubernetes Python Application
+# Research System - Kubernetes FastAPI Application
 
-A containerized Python microservices application for automated research workflows. This system orchestrates specialized agents for planning, searching, and analyzing research tasks.
+A containerized Python microservices application built with FastAPI for automated research workflows. This system orchestrates specialized agents for planning, searching, and analyzing research tasks.
 
 ## Features
 
