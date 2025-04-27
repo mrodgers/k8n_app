@@ -14,7 +14,7 @@ import requests
 from pydantic import BaseModel, Field
 import json
 
-from research_system.core.server import FastMCPServer, Context
+from src.research_system.core.server import FastMCPServer, Context
 
 # Configure logging
 logging.basicConfig(

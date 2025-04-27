@@ -57,11 +57,11 @@ class TestSearchResultProcessing:
         
         results = [
             SearchResult(query_id="q1", title="Relevant Test", url="https://example.com/1", 
-                       snippet="This is very relevant content about test queries.").dict(),
+                       snippet="This is very relevant content about test queries.").model_dump(),
             SearchResult(query_id="q1", title="Unrelated Topic", url="https://example.com/2", 
-                       snippet="This is about something completely different.").dict(),
+                       snippet="This is about something completely different.").model_dump(),
             SearchResult(query_id="q1", title="Somewhat Relevant", url="https://example.com/3", 
-                       snippet="This has some relation to test topics.").dict()
+                       snippet="This has some relation to test topics.").model_dump()
         ]
         
         query = "test query relevance"
@@ -105,7 +105,7 @@ class TestSearchResultProcessing:
         
         results = [
             SearchResult(query_id="q1", title="Test Source", url="https://example.com/1", 
-                       snippet="This is a test source.").dict(),
+                       snippet="This is a test source.").model_dump(),
         ]
         
         citations = search_agent.extract_citations(results)

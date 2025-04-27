@@ -13,6 +13,39 @@ NC='\033[0m' # No Color
 # Ensure logs directory exists
 mkdir -p logs
 
+# Check for required tools
+check_dependencies() {
+    # Check for gunicorn
+    if ! command -v gunicorn &> /dev/null; then
+        echo -e "${RED}gunicorn is not installed. Please install required dependencies.${NC}"
+        echo -e "Run one of the following commands to install dependencies:"
+        echo -e "${YELLOW}pip install -r requirements.txt${NC}"
+        
+        # Check if uv is available
+        if command -v uv &> /dev/null; then
+            echo -e "or using uv (faster):"
+            echo -e "${YELLOW}uv venv && source .venv/bin/activate && uv pip install -r requirements.txt${NC}"
+        fi
+        return 1
+    fi
+    
+    # Check for pytest (only when running tests)
+    if [ "$1" == "test" ] && ! command -v pytest &> /dev/null; then
+        echo -e "${RED}pytest is not installed. Please install required dependencies.${NC}"
+        echo -e "Run one of the following commands to install dependencies:"
+        echo -e "${YELLOW}pip install -r requirements.txt${NC}"
+        
+        # Check if uv is available
+        if command -v uv &> /dev/null; then
+            echo -e "or using uv (faster):"
+            echo -e "${YELLOW}uv venv && source .venv/bin/activate && uv pip install -r requirements.txt${NC}"
+        fi
+        return 1
+    fi
+    
+    return 0
+}
+
 # Function to show help
 show_help() {
     echo -e "${BLUE}Research System Management Script${NC}"
@@ -36,19 +69,36 @@ show_help() {
     echo "  ./app_manager.sh search \"artificial intelligence\""
     echo "  ./app_manager.sh task create --title \"AI Research\" --description \"Research on AI trends\""
     echo "  ./app_manager.sh test"
+    echo ""
+    echo "Setup Instructions:"
+    echo "  1. Create a virtual environment (choose one):"
+    echo "     - Standard Python: python -m venv venv && source venv/bin/activate"
+    echo "     - Using uv (faster): uv venv && source .venv/bin/activate"
+    echo "  2. Install dependencies (choose one):"
+    echo "     - Standard pip: pip install -r requirements.txt"
+    echo "     - Using uv (faster): uv pip install -r requirements.txt"
 }
 
 # Function to start the server
 start_server() {
     echo -e "${BLUE}Starting Research System server...${NC}"
+    
+    # Check for required dependencies
+    if ! check_dependencies; then
+        return 1
+    fi
+    
     # Check if server is already running
     if pgrep -f "gunicorn.*app:app" > /dev/null; then
         echo -e "${YELLOW}Server is already running.${NC}"
         return 0
     fi
     
+    # Create data directory if it doesn't exist
+    mkdir -p data
+    
     # Start the server with gunicorn
-    gunicorn --bind 0.0.0.0:8080 --workers 4 --timeout 120 --log-file logs/server.log --daemon src.app:app
+    PYTHONPATH=$(pwd) gunicorn --bind 0.0.0.0:8080 --workers 4 --timeout 120 --log-file logs/server.log --daemon src.app:app
     
     # Check if server started correctly
     sleep 2
@@ -57,6 +107,7 @@ start_server() {
         echo -e "API is accessible at ${BLUE}http://localhost:8080${NC}"
     else
         echo -e "${RED}Failed to start server. Check logs for details.${NC}"
+        cat logs/server.log | tail -n 20
         return 1
     fi
 }
@@ -114,15 +165,28 @@ view_logs() {
 
 # Function to run CLI commands
 run_cli() {
-    CLI_COMMAND="python -m src.research_system.cli.main $@"
+    # Check for required dependencies
+    if ! check_dependencies; then
+        return 1
+    fi
+    
+    # Add current directory to PYTHONPATH to ensure modules can be found
+    CLI_COMMAND="PYTHONPATH=$(pwd) python -m src.research_system.cli.main $@"
     echo -e "${BLUE}Executing: ${YELLOW}$CLI_COMMAND${NC}"
-    $CLI_COMMAND
+    eval "$CLI_COMMAND"
 }
 
 # Function to run tests
 run_tests() {
     echo -e "${BLUE}Running tests...${NC}"
-    python -m pytest
+    
+    # Check for required dependencies
+    if ! check_dependencies "test"; then
+        return 1
+    fi
+    
+    # Add current directory to PYTHONPATH to ensure modules can be found
+    PYTHONPATH="$(pwd):${PYTHONPATH}" python -m pytest
 }
 
 # Main logic

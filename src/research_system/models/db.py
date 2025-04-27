@@ -38,7 +38,7 @@ class ResearchTask(BaseModel):
     
     def to_dict(self):
         """Convert the task to a dictionary."""
-        return self.dict()
+        return self.model_dump()
     
     @classmethod
     def from_dict(cls, data: Dict):
@@ -60,7 +60,7 @@ class ResearchResult(BaseModel):
     
     def to_dict(self):
         """Convert the result to a dictionary."""
-        return self.dict()
+        return self.model_dump()
     
     @classmethod
     def from_dict(cls, data: Dict):
@@ -153,9 +153,14 @@ class TinyDBDatabase:
             True if the task was deleted, False if it did not exist.
         """
         Task = self.Query()
-        count = self.tasks.remove(Task.id == task_id)
-        if count > 0:
+        removed = self.tasks.remove(Task.id == task_id)
+        # In newer versions of TinyDB, remove returns a list of removed doc IDs
+        # In older versions, it returns a count
+        if removed and (isinstance(removed, list) and len(removed) > 0) or (isinstance(removed, int) and removed > 0):
             logger.info(f"Deleted task: {task_id}")
+            # Also remove associated results
+            Result = self.Query()
+            self.results.remove(Result.task_id == task_id)
             return True
         return False
     
@@ -1125,8 +1130,12 @@ class Database:
             try:
                 # Try to import psycopg2 to see if it's available
                 import psycopg2
-                self.db = PostgreSQLDatabase(connection_string)
-                logger.info("Using PostgreSQL database backend")
+                try:
+                    self.db = PostgreSQLDatabase(connection_string)
+                    logger.info("Using PostgreSQL database backend")
+                except psycopg2.OperationalError as e:
+                    logger.warning(f"PostgreSQL connection failed: {e}, falling back to TinyDB")
+                    self.db = TinyDBDatabase(db_path)
             except ImportError:
                 logger.warning("psycopg2 not available, falling back to TinyDB")
                 self.db = TinyDBDatabase(db_path)

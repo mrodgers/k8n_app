@@ -15,8 +15,8 @@ from pydantic import BaseModel, Field
 import os
 from urllib.parse import urlencode
 
-from research_system.core.server import FastMCPServer, Context
-from research_system.models.db import ResearchTask, ResearchResult, default_db
+from src.research_system.core.server import FastMCPServer, Context
+from src.research_system.models.db import ResearchTask, ResearchResult, default_db
 
 # Configure logging
 logging.basicConfig(
@@ -242,7 +242,7 @@ class SearchAgent:
                 context.update_progress(1.0, "Search completed")
             
             # Return the results as dictionaries
-            return [result.dict() for result in results]
+            return [result.model_dump() for result in results]
         
         except Exception as e:
             logger.error(f"Error processing search results: {e}")
@@ -367,7 +367,7 @@ class SearchAgent:
         logger.info(f"Filtered {len(search_results)} results to {len(filtered_results)}")
         
         # Return as dictionaries
-        return [result.dict() for result in filtered_results]
+        return [result.model_dump() for result in filtered_results]
     
     def rank_results_by_relevance(self, results: List[Union[Dict, SearchResult]], query: str) -> List[Dict]:
         """
@@ -406,7 +406,7 @@ class SearchAgent:
         search_results.sort(key=lambda x: x.relevance_score, reverse=True)
         
         # Return as dictionaries
-        return [result.dict() for result in search_results]
+        return [result.model_dump() for result in search_results]
     
     def extract_citations(self, results: List[Union[Dict, SearchResult]]) -> List[str]:
         """
@@ -446,7 +446,7 @@ class SearchAgent:
         result_dicts = []
         for result in results:
             if isinstance(result, SearchResult):
-                result_dicts.append(result.dict())
+                result_dicts.append(result.model_dump())
             else:
                 result_dicts.append(result)
         

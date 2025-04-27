@@ -10,8 +10,8 @@ import uuid
 from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 
-from research_system.core.server import FastMCPServer, Context
-from research_system.models.db import ResearchTask, ResearchResult, default_db
+from src.research_system.core.server import FastMCPServer, Context
+from src.research_system.models.db import ResearchTask, ResearchResult, default_db
 
 # Configure logging
 logging.basicConfig(
@@ -114,7 +114,7 @@ class PlannerAgent:
         )
         self.db.create_task(task)
         logger.info(f"Created research task: {task.id} - {task.title}")
-        return task.to_dict()
+        return task.model_dump()
     
     def create_research_plan(self, task_id: str, steps: List[Dict[str, Any]] = None) -> Dict:
         """
@@ -149,7 +149,7 @@ class PlannerAgent:
         self.db.update_task(task)
         
         logger.info(f"Created research plan: {plan.id} for task: {task.id}")
-        return plan.dict()
+        return plan.model_dump()
     
     def get_research_plan(self, plan_id: str) -> Dict:
         """
@@ -167,7 +167,7 @@ class PlannerAgent:
         if plan_id not in self.plans:
             raise ValueError(f"Plan not found: {plan_id}")
         
-        return self.plans[plan_id].dict()
+        return self.plans[plan_id].model_dump()
     
     def update_research_plan(self, plan_id: str, steps: List[Dict[str, Any]] = None,
                            status: str = None) -> Dict:
@@ -199,7 +199,7 @@ class PlannerAgent:
         plan.updated_at = time.time()
         
         logger.info(f"Updated research plan: {plan.id}")
-        return plan.dict()
+        return plan.model_dump()
     
     def list_research_tasks(self, status: Optional[str] = None, assigned_to: Optional[str] = None,
                           tag: Optional[str] = None) -> List[Dict]:
@@ -215,7 +215,7 @@ class PlannerAgent:
             A list of dictionary representations of tasks matching the filters.
         """
         tasks = self.db.list_tasks(status=status, assigned_to=assigned_to, tag=tag)
-        return [task.to_dict() for task in tasks]
+        return [task.model_dump() for task in tasks]
     
     def generate_plan_for_task(self, task_id: str, context: Context = None) -> Dict:
         """

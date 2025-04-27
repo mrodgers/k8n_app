@@ -15,12 +15,12 @@ from pydantic import BaseModel
 import yaml
 
 # Import research system components
-from research_system.core.server import FastMCPServer, Context
-from research_system.core.coordinator import Coordinator, default_coordinator
-from research_system.agents.planner import PlannerAgent, default_planner
-from research_system.agents.search import SearchAgent, default_search
-from research_system.models.db import Database, default_db
-from research_system.models.db_config import load_config as load_db_config
+from src.research_system.core.server import FastMCPServer, Context
+from src.research_system.core.coordinator import Coordinator, default_coordinator
+from src.research_system.agents.planner import PlannerAgent, default_planner
+from src.research_system.agents.search import SearchAgent, default_search
+from src.research_system.models.db import Database, default_db
+from src.research_system.models.db_config import load_config as load_db_config
 
 # Configure logging
 logging.basicConfig(
@@ -193,7 +193,7 @@ async def get_task(task_id: str):
     task = default_db.get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
-    return {"task": task.to_dict()}
+    return {"task": task.model_dump()}
 
 @app.post("/api/tasks/{task_id}/plan", status_code=201)
 async def create_plan(task_id: str):

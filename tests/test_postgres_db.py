@@ -11,7 +11,7 @@ import uuid
 from typing import Generator
 
 # Import the database classes
-from research_system.models.db import (
+from src.research_system.models.db import (
     ResearchTask, ResearchResult, 
     TinyDBDatabase, PostgreSQLDatabase, 
     Database, generate_id

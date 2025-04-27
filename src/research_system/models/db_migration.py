@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 import json
 import argparse
 
-from research_system.models.db import TinyDBDatabase, PostgreSQLDatabase, ResearchTask, ResearchResult
+from src.research_system.models.db import TinyDBDatabase, PostgreSQLDatabase, ResearchTask, ResearchResult
 
 # Configure logging
 logging.basicConfig(

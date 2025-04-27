@@ -5,11 +5,15 @@ This module contains pytest fixtures that can be used across all test modules.
 """
 
 import os
+import sys
 import pytest
 import json
 import tempfile
 from unittest.mock import MagicMock, patch
 from typing import Dict, List, Optional, Any
+
+# Add the project root to Python path to resolve module imports
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.research_system.core.server import FastMCPServer, Context
 from src.research_system.models.db import Database, ResearchTask, ResearchResult
@@ -73,8 +77,10 @@ def temp_db_path():
 
 
 @pytest.fixture
-def test_db(temp_db_path):
+def test_db(temp_db_path, monkeypatch):
     """Create a test database with a temporary file."""
+    # Force TinyDB for testing to avoid PostgreSQL connection issues
+    monkeypatch.setenv("USE_POSTGRES", "false")
     return Database(db_path=temp_db_path)
 
 

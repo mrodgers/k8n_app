@@ -20,11 +20,11 @@ from rich.progress import Progress
 from rich.table import Table
 
 # Import research system components
-from research_system.core.server import Context
-from research_system.core.coordinator import default_coordinator
-from research_system.agents.planner import PlannerAgent, default_planner
-from research_system.agents.search import SearchAgent, default_search
-from research_system.models.db import Database, ResearchTask, ResearchResult, default_db
+from src.research_system.core.server import Context
+from src.research_system.core.coordinator import default_coordinator
+from src.research_system.agents.planner import PlannerAgent, default_planner
+from src.research_system.agents.search import SearchAgent, default_search
+from src.research_system.models.db import Database, ResearchTask, ResearchResult, default_db
 
 # Configure logging
 logging.basicConfig(
