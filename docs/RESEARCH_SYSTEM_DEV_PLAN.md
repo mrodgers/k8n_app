@@ -31,7 +31,7 @@ Based on code review completed on April 27, 2025, the project is in the early st
 - CLI interface (directory structure exists but implementation is missing)
 - Docker Compose configuration (not present)
 - Kubernetes manifests (not present)
-- Comprehensive tests (only basic Flask app tests exist)
+- Comprehensive tests (only basic FastAPI app tests exist)
 
 ## System Architecture
 

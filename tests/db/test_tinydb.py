@@ -11,6 +11,13 @@ import json
 from typing import Dict, List, Optional, Any, Union
 from tinydb import TinyDB, Query
 
+# Add the project root to the Python path
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '../..'))
+sys.path.insert(0, project_root)
+
+from src.research_system.models.db import generate_id
+
 data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'data')
 os.makedirs(data_dir, exist_ok=True)
 db_path = os.path.join(data_dir, 'test_db.json')

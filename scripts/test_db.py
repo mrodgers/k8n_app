@@ -13,7 +13,7 @@ project_root = os.path.abspath(os.path.join(script_dir, '..'))
 sys.path.insert(0, project_root)
 
 # Now we can import from the research_system module
-from research_system.models.db import (
+from src.research_system.models.db import (
     Database, ResearchTask, ResearchResult, generate_id, TinyDBDatabase
 )
 

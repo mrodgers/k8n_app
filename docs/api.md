@@ -4,13 +4,13 @@ This document describes the RESTful API endpoints provided by the k8s-python-app
 
 ## API Overview
 
-The k8s-python-app provides a simple RESTful API for demonstration purposes. The application is built with Flask and returns JSON responses.
+The k8s-python-app provides a simple RESTful API for demonstration purposes. The application is built with FastAPI and returns JSON responses.
 
 ## Base URL
 
 When running locally:
 ```
-http://localhost:8080
+http://localhost:8181
 ```
 
 When deployed to Kubernetes, the base URL will depend on your cluster configuration and ingress setup.
@@ -115,13 +115,13 @@ Examples of using the API with cURL:
 ### Check Health
 
 ```bash
-curl -X GET http://localhost:8080/health
+curl -X GET http://localhost:8181/health
 ```
 
 ### Get Welcome Message
 
 ```bash
-curl -X GET http://localhost:8080/
+curl -X GET http://localhost:8181/
 ```
 
 ## Using the API with Python
@@ -132,10 +132,10 @@ Example of using the API with Python's requests library:
 import requests
 
 # Check health
-response = requests.get('http://localhost:8080/health')
+response = requests.get('http://localhost:8181/health')
 print(response.json())
 
 # Get welcome message
-response = requests.get('http://localhost:8080/')
+response = requests.get('http://localhost:8181/')
 print(response.json())
 ```

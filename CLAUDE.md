@@ -113,7 +113,7 @@ k8s-python-app-new/
 docker build -t research-system .
 
 # Run with Docker
-docker run -p 8080:8080 research-system
+docker run -p 8181:8181 research-system
 
 # Deploy to Kubernetes
 kubectl apply -f kubernetes/deployment.yaml
@@ -151,7 +151,7 @@ def setup_server():
 
 # Agent interaction pattern
 async def call_agent(agent_name, task_description):
-    agent_url = f"http://{agent_name}-service:8080"
+    agent_url = f"http://{agent_name}-service:8181"
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{agent_url}/tools/run_task",
@@ -172,7 +172,7 @@ LOG_LEVEL = os.getenv('LOG_LEVEL', 'info')
 
 # Service discovery
 agent_host = os.getenv('SEARCH_SERVICE_HOST', 'search-service')
-agent_port = os.getenv('SEARCH_SERVICE_PORT', '8080')
+agent_port = os.getenv('SEARCH_SERVICE_PORT', '8181')
 agent_url = f"http://{agent_host}:{agent_port}"
 ```
 
@@ -229,7 +229,7 @@ find . -name ".DS_Store" -delete
 pytest tests/
 
 # Check test coverage
-pytest --cov=research_system tests/
+pytest --cov=src.research_system tests/
 ```
 
 ## Developer Onboarding and Next Steps
@@ -242,12 +242,21 @@ pytest --cov=research_system tests/
    git clone https://github.com/your-org/k8s-python-app-new.git
    cd k8s-python-app-new
    
-   # Create and activate a virtual environment
+   # Create and activate a virtual environment (choose one):
+   # Option 1: Using standard Python venv
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    
-   # Install dependencies
+   # Option 2: Using uv (recommended, faster)
+   uv venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   
+   # Install dependencies (choose one):
+   # Option 1: Using standard pip
    pip install -r requirements.txt
+   
+   # Option 2: Using uv (recommended, faster)
+   uv pip install -r requirements.txt
    
    # Run the app locally
    ./app_manager.sh start
@@ -307,11 +316,14 @@ The project has made significant progress on Phase 1 implementation. The followi
    - Add retry mechanisms for API calls
    - Improve error handling
 
-4. **Testing Improvements (Medium Priority)**:
-   - Increase test coverage to at least 90%
-   - Add more integration tests
-   - Create end-to-end tests with mocked external services
+4. **Testing Improvements (High Priority)**:
+   - Increase test coverage from current 49% to at least 90%
+   - Add more integration tests for end-to-end workflows
+   - Create tests for each function implemented
+   - Set up mock services for external dependencies
    - Add performance benchmarks
+   - Implement continuous testing in CI/CD pipeline
+   - Focus on testing both TinyDB and PostgreSQL database backends
 
 5. **Documentation (Medium Priority)**:
    - Update architecture diagrams
@@ -321,7 +333,7 @@ The project has made significant progress on Phase 1 implementation. The followi
 
 ## Database Configuration
 
-The system now supports both TinyDB (for development) and PostgreSQL (for production):
+The system supports both TinyDB (for development) and PostgreSQL (for production):
 
 ```python
 # Database model classes
@@ -351,7 +363,7 @@ class ResearchResult(BaseModel):
 
 ### Database Backend Selection
 
-The system automatically selects the appropriate database backend:
+The system automatically selects the appropriate database backend based on environment variables:
 
 ```bash
 # Use TinyDB (default for development)
@@ -361,6 +373,21 @@ export USE_POSTGRES=false
 export USE_POSTGRES=true
 export DATABASE_URL="postgresql://postgres:postgres-password@localhost:5432/research"
 ```
+
+### PostgreSQL vs TinyDB Usage
+
+#### TinyDB
+- **Use cases**: Development, testing, simple deployments
+- **Advantages**: No external dependencies, simple setup, fast for small datasets
+- **Limitations**: Not suitable for production, file-based (no concurrent access)
+- **Configuration**: Set `USE_POSTGRES=false` or don't set it at all (default)
+
+#### PostgreSQL
+- **Use cases**: Production, staging, Kubernetes deployments
+- **Advantages**: Scalable, supports concurrent access, persistent storage
+- **Limitations**: Requires additional setup, external dependency
+- **Configuration**: Set `USE_POSTGRES=true` and provide valid `DATABASE_URL`
+- **Kubernetes**: Deployed as a separate service with persistent volume
 
 For more detailed information on the database implementation, refer to [DATABASE.md](./docs/DATABASE.md).
 
@@ -415,6 +442,27 @@ When writing tests:
 - Create a test for each function implemented
 - Aim for 90% code coverage for all new code
 - Run coverage reports using pytest-cov
+- Test both TinyDB and PostgreSQL backends
+- Use parameterized tests where appropriate
+
+### Test Coverage Requirements
+
+The project aims for a minimum of 90% test coverage, with coverage currently at 49%. Key coverage targets:
+
+- Core module: 95% coverage target (current: coordinator.py 50%, server.py 60%)
+- Agents module: 90% coverage target (current: planner.py 70%, search.py 78%)
+- Models module: 95% coverage target (current: db.py 41%, db_config.py 15%, db_migration.py 16%)
+- CLI module: 85% coverage target (current: main.py 56%)
+
+To check current coverage:
+
+```bash
+# Generate coverage report
+PYTHONPATH=$(pwd) pytest --cov=src.research_system tests/
+
+# Generate HTML coverage report
+PYTHONPATH=$(pwd) pytest --cov=src.research_system --cov-report=html tests/
+```
 
 ## Common Issues and Solutions
 
@@ -468,17 +516,18 @@ The following important changes have recently been completed:
    - Added progress tracking for long-running operations
    - Created table-based output for search results and tasks
 
-4. **Flask App Integration**:
+4. **FastAPI App Integration**:
+   - Migrated from Flask to FastAPI for better performance and async support
    - Enhanced app.py to integrate with Research System core components
    - Added API endpoints for tasks, plans, and search
    - Implemented proper routing and error handling
-   - Connected the Flask app with agent functionality
+   - Connected the FastAPI app with agent functionality
 
 5. **Testing Infrastructure**:
    - Created Docker/Podman-based testing environment
    - Fixed test compatibility issues
    - Added integration tests for core components
-   - Improved test coverage to 62%
+   - Improved test coverage to 49%
 
 6. **Management Scripts**:
    - Added app_manager.sh for common operations

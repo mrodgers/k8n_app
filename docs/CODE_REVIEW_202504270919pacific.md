@@ -111,11 +111,11 @@ Basic containerization exists but lacks:
 
 ```
 tests/
-└── test_app.py  ⚠ (Only basic Flask tests)
+└── test_app.py  ⚠ (Only basic FastAPI tests)
 ```
 
 Testing is minimal:
-- Basic Flask app tests exist
+- Basic FastAPI app tests exist
 - Missing recommended test files (conftest.py, test_search.py)
 - No tests for core research components
 

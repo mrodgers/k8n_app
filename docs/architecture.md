@@ -22,10 +22,10 @@ graph TD
         end
         
         subgraph "Container Architecture"
-            subgraph "Flask Application Container"
-                Flask[Web Layer - Flask App] --> BL[Business Logic Layer]
-                Flask --> Health[Health Monitoring]
-                Flask --> Log[Logging System]
+            subgraph "FastAPI Application Container"
+                FastAPI[Web Layer - FastAPI App] --> BL[Business Logic Layer]
+                FastAPI --> Health[Health Monitoring]
+                FastAPI --> Log[Logging System]
             end
         end
     end
@@ -39,9 +39,9 @@ graph TD
     Service --> Pod2
     Service --> Pod3
     
-    Pod1 --> Flask
-    Pod2 --> Flask
-    Pod3 --> Flask
+    Pod1 --> FastAPI
+    Pod2 --> FastAPI
+    Pod3 --> FastAPI
     
     User --> Mac
     
@@ -59,8 +59,8 @@ graph TD
         ConfigFile[config.yaml]
     end
     
-    EnvVars --> Flask
-    ConfigFile --> Flask
+    EnvVars --> FastAPI
+    ConfigFile --> FastAPI
 ```
 
 ## Detailed Component Architecture
@@ -69,12 +69,12 @@ graph TD
 flowchart TD
     subgraph "Application Components"
         subgraph "Web Layer"
-            Flask[Flask Web Application]
+            FastAPI[FastAPI Web Application]
             Routes[URL Routes]
             APIEndpoints[API Endpoints]
             
-            Flask --> Routes
-            Flask --> APIEndpoints
+            FastAPI --> Routes
+            FastAPI --> APIEndpoints
         end
         
         subgraph "Business Logic Layer"
@@ -121,7 +121,7 @@ flowchart TD
         AppManager --> K8sManifests
     end
     
-    EnvVars --> Flask
-    ConfigFile --> Flask
-    K8sManifests --> Flask
+    EnvVars --> FastAPI
+    ConfigFile --> FastAPI
+    K8sManifests --> FastAPI
 ```
