@@ -97,14 +97,14 @@ start_server() {
     # Create data directory if it doesn't exist
     mkdir -p data
     
-    # Start the server with gunicorn
-    PYTHONPATH=$(pwd) gunicorn --bind 0.0.0.0:8080 --workers 4 --timeout 120 --log-file logs/server.log --daemon src.app:app
+    # Start the server with gunicorn using uvicorn worker (using port 8181 instead of 8080)
+    PYTHONPATH=$(pwd) gunicorn --bind 0.0.0.0:8181 --workers 4 --worker-class uvicorn.workers.UvicornWorker --timeout 120 --log-file logs/server.log --daemon src.app:app
     
     # Check if server started correctly
     sleep 2
     if pgrep -f "gunicorn.*app:app" > /dev/null; then
         echo -e "${GREEN}Server started successfully.${NC}"
-        echo -e "API is accessible at ${BLUE}http://localhost:8080${NC}"
+        echo -e "API is accessible at ${BLUE}http://localhost:8181${NC}"
     else
         echo -e "${RED}Failed to start server. Check logs for details.${NC}"
         cat logs/server.log | tail -n 20
@@ -138,11 +138,11 @@ stop_server() {
 check_status() {
     if pgrep -f "gunicorn.*app:app" > /dev/null; then
         echo -e "${GREEN}Server is running.${NC}"
-        echo -e "API is accessible at ${BLUE}http://localhost:8080${NC}"
+        echo -e "API is accessible at ${BLUE}http://localhost:8181${NC}"
         
         # Try to get server status via API
         echo -e "\n${BLUE}Checking server health...${NC}"
-        HEALTH=$(curl -s http://localhost:8080/health)
+        HEALTH=$(curl -s http://localhost:8181/health)
         if [[ $HEALTH == *"healthy"* ]]; then
             echo -e "${GREEN}Server health check: OK${NC}"
         else
