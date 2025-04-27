@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: research-system
+  labels:
+    app: research-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: research-system
+  template:
+    metadata:
+      labels:
+        app: research-system
+    spec:
+      containers:
+      - name: research-system
+        image: research-system:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+        env:
+        - name: DB_USE_POSTGRES
+          value: "true"
+        - name: DB_POSTGRES_HOST
+          value: "postgres"
+        - name: DB_POSTGRES_PORT
+          value: "5432"
+        - name: DB_POSTGRES_DBNAME
+          value: "research"
+        - name: DB_POSTGRES_USER
+          value: "postgres"
+        - name: DB_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: research-system-db-credentials
+              key: DB_POSTGRES_PASSWORD
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: research-system-config
+              key: app.env
+              optional: true
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: research-system-config

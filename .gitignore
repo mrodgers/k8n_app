@@ -172,3 +172,38 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Project-specific temporary files
+logs/*.log
+*.db
+*.sqlite
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Windows specific
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+[Dd]esktop.ini
+
+# VS Code
+.vscode/
+
+# IntelliJ / PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Local development configuration
+config.local.yaml
+*.local.env
+
+# Kubernetes local configs
+kubernetes/*.local.yaml

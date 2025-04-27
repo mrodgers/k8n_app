@@ -1,0 +1,6 @@
+app:
+  port: 8080
+  max_workers: 4
+logging:
+  level: INFO
+environment: production

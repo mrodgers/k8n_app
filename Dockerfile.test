@@ -1,0 +1,31 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install curl and development dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir pytest pytest-cov
+
+# Copy the application code
+COPY src/ ./src/
+COPY tests/ ./tests/
+COPY config.yaml .
+
+# Create necessary directories
+RUN mkdir -p logs data
+
+# Fix imports by creating a symlink for research_system
+RUN ln -s /app/src/research_system /usr/local/lib/python3.11/site-packages/research_system
+
+# Set Python path properly
+ENV PYTHONPATH=/app
+
+# Default command to run tests
+CMD ["pytest", "-v"]
