@@ -20,10 +20,10 @@ COPY config.yaml .
 RUN mkdir -p data logs && \
     chown -R appuser:appuser /app
 
-EXPOSE 8080
+EXPOSE 8181
 
 # Switch to non-root user
 USER appuser
 
 # Start FastAPI app with uvicorn
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8181"]

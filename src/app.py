@@ -40,7 +40,7 @@ def load_config():
         logger.error(f"Failed to load configuration: {e}")
         # Return default configuration
         return {
-            "app": {"port": 8080, "max_workers": 4},
+            "app": {"port": 8181, "max_workers": 4},
             "logging": {"level": "INFO"},
             "environment": "development"
         }
@@ -228,7 +228,7 @@ async def get_result(result_id: str):
 if __name__ == '__main__':
     import uvicorn
     # Get port from config or environment
-    port = int(os.getenv("PORT", config.get("app", {}).get("port", 8080)))
+    port = int(os.getenv("PORT", config.get("app", {}).get("port", 8181)))
     
     # Start the FastAPI app
     logger.info(f"Starting Research System API on port {port}")

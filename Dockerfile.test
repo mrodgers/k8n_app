@@ -21,8 +21,7 @@ COPY config.yaml .
 # Create necessary directories
 RUN mkdir -p logs data
 
-# Fix imports by creating a symlink for research_system
-RUN ln -s /app/src/research_system /usr/local/lib/python3.11/site-packages/research_system
+# No need for a symlink as we use src.research_system import paths
 
 # Set Python path properly
 ENV PYTHONPATH=/app

@@ -8,7 +8,7 @@ services:
     image: research-system:latest
     container_name: research-system
     ports:
-      - "8080:8080"
+      - "8181:8181"
     environment:
       - DB_USE_POSTGRES=true
       - DB_POSTGRES_HOST=postgres
@@ -23,7 +23,7 @@ services:
     depends_on:
       - postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      test: ["CMD", "curl", "-f", "http://localhost:8181/healthz"]
       interval: 30s
       timeout: 10s
       retries: 3

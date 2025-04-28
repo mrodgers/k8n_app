@@ -19,7 +19,7 @@ spec:
         image: research-system:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080
+        - containerPort: 8181
         resources:
           limits:
             cpu: "500m"
@@ -52,7 +52,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8080
+            port: 8181
           initialDelaySeconds: 10
           periodSeconds: 15
           timeoutSeconds: 5
@@ -60,7 +60,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /readyz
-            port: 8080
+            port: 8181
           initialDelaySeconds: 5
           periodSeconds: 10
           timeoutSeconds: 2
