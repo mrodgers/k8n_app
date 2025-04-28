@@ -4,6 +4,10 @@ metadata:
   name: research-system
   labels:
     app: research-system
+    app.kubernetes.io/name: research-system
+    app.kubernetes.io/version: "${RESEARCH_SYSTEM_VERSION:-1.0.0}"
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: research-platform
 spec:
   replicas: 1
   selector:
@@ -20,8 +24,13 @@ spec:
         command: ['sh', '-c', 'until wget -q -O - http://ollama-service:11434/api/version; do echo "Waiting for Ollama service..."; sleep 2; done;']
       containers:
       - name: research-system
-        image: research-system:latest
+        image: ${RESEARCH_SYSTEM_IMAGE:-research-system:latest}
         imagePullPolicy: IfNotPresent
+        env:
+        - name: RESEARCH_SYSTEM_VERSION
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.labels.app.kubernetes.io/version
         ports:
         - containerPort: 8181
         resources:

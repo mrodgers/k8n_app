@@ -62,13 +62,24 @@ show_help() {
     echo "  result <subcommand> Manage research results"
     echo "  plan <subcommand> Manage research plans"
     echo "  test             Run tests"
+    echo "  build [options]  Build application and container"
+    echo "  version          Show current version information"
     echo "  ollama <subcommand> Manage Ollama LLM service"
     echo "  help             Show this help message"
+    echo ""
+    echo "Build options:"
+    echo "  --patch          Increment patch version (1.0.0 -> 1.0.1)"
+    echo "  --minor          Increment minor version (1.0.0 -> 1.1.0)"
+    echo "  --major          Increment major version (1.0.0 -> 2.0.0)"
+    echo "  --tag            Create git tag for the release"
+    echo "  --no-git         Skip git operations"
+    echo "  --build-only     Update version but skip container build"
     echo ""
     echo "Examples:"
     echo "  ./app_manager.sh start"
     echo "  ./app_manager.sh search \"artificial intelligence\""
     echo "  ./app_manager.sh task create --title \"AI Research\" --description \"Research on AI trends\""
+    echo "  ./app_manager.sh build --patch"
     echo "  ./app_manager.sh ollama start"
     echo "  ./app_manager.sh test"
     echo ""
@@ -314,6 +325,91 @@ manage_ollama() {
     esac
 }
 
+# Function to build the application
+build_app() {
+    echo -e "${BLUE}Building Research System...${NC}"
+    
+    # Parse build arguments
+    local build_args=""
+    local minor=false
+    local patch=false
+    local major=false
+    local tag=false
+    local no_git=false
+    local build_only=false
+    
+    # Skip the first argument which is "build"
+    shift
+    
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --minor)
+                minor=true
+                build_args="$build_args --minor"
+                shift
+                ;;
+            --patch)
+                patch=true
+                build_args="$build_args --patch"
+                shift
+                ;;
+            --major)
+                major=true
+                build_args="$build_args --major"
+                shift
+                ;;
+            --tag)
+                tag=true
+                build_args="$build_args --tag"
+                shift
+                ;;
+            --no-git)
+                no_git=true
+                build_args="$build_args --no-git"
+                shift
+                ;;
+            --build-only)
+                build_only=true
+                build_args="$build_args --build-only"
+                shift
+                ;;
+            *)
+                echo -e "${RED}Unknown build option: $1${NC}"
+                echo -e "Available options: --minor, --patch, --major, --tag, --no-git, --build-only"
+                return 1
+                ;;
+        esac
+    done
+    
+    # Run the build script
+    if [ -x "./scripts/build_container.sh" ]; then
+        "./scripts/build_container.sh" $build_args
+    else
+        echo -e "${RED}Build script not found or not executable${NC}"
+        echo -e "Please make sure scripts/build_container.sh exists and is executable"
+        return 1
+    fi
+}
+
+# Function to show the current version
+show_version() {
+    if [ -f "src/research_system/version.py" ]; then
+        echo -e "${BLUE}Research System Version Information:${NC}"
+        python -c "
+from src.research_system.version import get_version_info
+info = get_version_info()
+print(f'  Version:      {info[\"version\"]}')
+print(f'  Build Number: {info[\"build_number\"]}')
+print(f'  Build Date:   {info[\"build_date\"]}')
+print(f'  Git Revision: {info[\"git_revision\"] or \"N/A\"}')
+"
+    else
+        echo -e "${RED}Version information not available${NC}"
+        echo -e "Version module not found at src/research_system/version.py"
+        return 1
+    fi
+}
+
 # Main logic
 case "$1" in
     start)
@@ -333,6 +429,12 @@ case "$1" in
         ;;
     test)
         run_tests
+        ;;
+    build)
+        build_app "$@"
+        ;;
+    version)
+        show_version
         ;;
     ollama)
         manage_ollama "$@"
