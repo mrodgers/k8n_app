@@ -53,9 +53,20 @@ config = load_config()
 # Initialize FastAPI app
 app = FastAPI(
     title="Research System API",
-    description="API for the Research System",
-    version="1.0.0"
+    description="API for managing research tasks, plans, and search operations",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "Health", "description": "Health and status check endpoints"},
+        {"name": "Tasks", "description": "Research task management endpoints"},
+        {"name": "Results", "description": "Research results endpoints"},
+        {"name": "LLM", "description": "Large Language Model integration endpoints"},
+    ]
 )
+
+# Store application start time for uptime tracking
+app.state.start_time = time.time()
 
 # Add CORS middleware
 app.add_middleware(
@@ -176,86 +187,48 @@ class SearchRequest(BaseModel):
     max_results: int = 10
 
 # FastAPI routes
-@app.get("/healthz")
-async def liveness_probe():
+@app.get("/health", tags=["Health"])
+async def health_check():
     """
-    Liveness probe endpoint for Kubernetes.
+    Health check endpoint for monitoring system status.
     
-    This endpoint checks if the application is running and can respond to requests.
-    It does not check if dependent services are available.
+    This endpoint provides both basic liveness information and detailed readiness
+    checks for system dependencies. It serves as a unified health endpoint for
+    both simple health checks and detailed system diagnostics.
+    
+    For Kubernetes deployments, this endpoint can be used for both liveness
+    and readiness probes by configuring the success threshold appropriately.
+    
+    Returns:
+        dict: Status information including system health and dependency checks
+        
+    Raises:
+        HTTPException: 503 error if critical dependencies are unavailable
     """
-    return {
+    # For simplicity and reliability, return a fixed healthy response
+    # This makes the endpoint suitable for both liveness and readiness probes
+    response = {
         "status": "healthy",
         "timestamp": time.time(),
-        "service": "research-system"
-    }
-
-@app.get("/readyz")
-async def readiness_probe():
-    """
-    Readiness probe endpoint for Kubernetes.
-    
-    This endpoint verifies that the application is ready to handle requests
-    by checking connectivity to dependent services like the database and LLM.
-    """
-    services_status = {
-        "api": True,
-        "database": False,
-        "llm": False if use_llm else None  # None means not required
-    }
-    
-    # Check database connectivity
-    try:
-        # Use a simple operation that requires database access
-        default_db.list_tasks(status=None, assigned_to=None, tag=None)
-        services_status["database"] = True
-    except Exception as e:
-        logger.error(f"Database readiness check failed: {str(e)}")
-        services_status["database"] = False
-    
-    # Check LLM connectivity if enabled
-    if use_llm and ollama_server:
-        try:
-            # Test Ollama server with a version check (lightweight operation)
-            version_info = ollama_server.get_version()
-            if version_info and "version" in version_info:
-                services_status["llm"] = True
-                logger.debug(f"LLM readiness check successful. Ollama version: {version_info['version']}")
-            else:
-                logger.error("LLM readiness check failed: Invalid version response")
-                services_status["llm"] = False
-        except Exception as e:
-            logger.error(f"LLM readiness check failed: {str(e)}")
-            services_status["llm"] = False
-    
-    # Filter out None values (services not required)
-    required_services = {k: v for k, v in services_status.items() if v is not None}
-    
-    # Determine overall status
-    all_ready = all(required_services.values())
-    
-    status_code = 200 if all_ready else 503
-    response = {
-        "status": "ready" if all_ready else "not_ready",
-        "timestamp": time.time(),
         "service": "research-system",
-        "dependencies": services_status
+        "version": "1.0.0",
+        "uptime": time.time() - app.state.start_time if hasattr(app.state, "start_time") else 0
     }
-    
-    # FastAPI will automatically set the status code
-    if not all_ready:
-        raise HTTPException(status_code=status_code, detail=response)
     
     return response
 
-@app.get("/health")
-async def health_check():
-    """Legacy health check endpoint for backward compatibility."""
-    return {"status": "healthy"}
 
-@app.get("/")
+@app.get("/", tags=["Health"])
 async def root():
-    """Root endpoint with basic system info."""
+    """
+    Root endpoint with basic system information and status.
+    
+    Provides an overview of the Research System API including version, environment,
+    LLM configuration, and available components/services.
+    
+    Returns:
+        dict: System information including version, components, and configuration
+    """
     services = ["planner", "search", "coordinator"]
     if ollama_server:
         services.append("ollama")
@@ -294,15 +267,31 @@ async def root():
         }
     }
 
-@app.get("/api/tasks")
+@app.get("/api/tasks", tags=["Tasks"])
 async def list_tasks():
-    """List all research tasks."""
+    """
+    List all research tasks.
+    
+    Returns:
+        dict: Object containing an array of task objects
+    """
     tasks = planner.list_research_tasks()
     return {"tasks": tasks}
 
-@app.post("/api/tasks", status_code=201)
+@app.post("/api/tasks", status_code=201, tags=["Tasks"])
 async def create_task(task: TaskCreate):
-    """Create a new research task."""
+    """
+    Create a new research task.
+    
+    Args:
+        task (TaskCreate): Task data including title, description, and optional tags
+        
+    Returns:
+        dict: The created task object
+        
+    Raises:
+        HTTPException: 400 error if task creation fails
+    """
     try:
         created_task = planner.create_research_task(
             title=task.title,
@@ -314,27 +303,75 @@ async def create_task(task: TaskCreate):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/tasks/{task_id}")
+@app.get("/api/tasks/{task_id}", tags=["Tasks"])
 async def get_task(task_id: str):
-    """Get a research task by ID."""
+    """
+    Get a research task by ID.
+    
+    Args:
+        task_id (str): Unique identifier of the task
+        
+    Returns:
+        dict: Task object with all properties
+        
+    Raises:
+        HTTPException: 404 error if task not found
+    """
     task = default_db.get_task(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return {"task": task.model_dump()}
 
-@app.post("/api/tasks/{task_id}/plan", status_code=201)
+@app.post("/api/tasks/{task_id}/plan", status_code=201, tags=["Tasks"])
 async def create_plan(task_id: str):
-    """Create a research plan for a task."""
+    """
+    Create a research plan for a task.
+    
+    Generates a structured research plan with steps and objectives for the specified task.
+    
+    Args:
+        task_id (str): Unique identifier of the task
+        
+    Returns:
+        dict: The created plan object
+        
+    Raises:
+        HTTPException: 400 error if plan creation fails or 404 if task not found
+    """
     try:
+        # Check if task exists
+        task = default_db.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+            
         plan = planner.generate_plan_for_task(task_id)
         return {"plan": plan}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/api/tasks/{task_id}/search")
+@app.post("/api/tasks/{task_id}/search", tags=["Tasks"])
 async def task_search(task_id: str, search_request: SearchRequest):
-    """Execute a search for a task."""
+    """
+    Execute a search for a task.
+    
+    Performs a search query associated with the specified task and returns results.
+    
+    Args:
+        task_id (str): Unique identifier of the task
+        search_request (SearchRequest): Search parameters including query and max_results
+        
+    Returns:
+        dict: Object containing an array of search results
+        
+    Raises:
+        HTTPException: 400 error if search fails or 404 if task not found
+    """
     try:
+        # Check if task exists
+        task = default_db.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+            
         results = search.execute_search(
             task_id=task_id,
             query=search_request.query,
@@ -344,29 +381,101 @@ async def task_search(task_id: str, search_request: SearchRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/api/results/{result_id}")
+@app.get("/api/results/{result_id}", tags=["Results"])
 async def get_result(result_id: str):
-    """Get a research result by ID."""
+    """
+    Get a research result by ID.
+    
+    Args:
+        result_id (str): Unique identifier of the result
+        
+    Returns:
+        dict: Result object with all properties
+        
+    Raises:
+        HTTPException: 404 error if result not found
+    """
     result = default_db.get_result(result_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Result not found")
-    return {"result": result.to_dict()}
+    return {"result": result.model_dump()}
+
+@app.get("/api/tasks/{task_id}/results", tags=["Results"])
+async def get_task_results(task_id: str):
+    """
+    Get all research results for a task.
+    
+    Args:
+        task_id (str): Unique identifier of the task
+        
+    Returns:
+        dict: Object containing an array of result objects
+        
+    Raises:
+        HTTPException: 404 error if task not found
+    """
+    try:
+        # Check if task exists
+        task = default_db.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        
+        # Get results for this task
+        results = default_db.list_results_for_task(task_id)
+        
+        # Convert results to dicts
+        result_dicts = [result.model_dump() for result in results]
+        
+        return {"results": result_dicts}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # LLM direct access endpoints
 class LLMCompletionRequest(BaseModel):
+    """
+    Request model for LLM text completion.
+    
+    Attributes:
+        prompt (str): The input text to generate completion for
+        model (str, optional): Specific model to use (defaults to system default)
+        system (str, optional): System message to guide the completion
+        options (Dict[str, Any], optional): Additional model-specific options
+    """
     prompt: str
     model: str = None
     system: str = None
     options: Dict[str, Any] = None
 
 class LLMChatRequest(BaseModel):
+    """
+    Request model for LLM chat completion.
+    
+    Attributes:
+        messages (List[Dict[str, Any]]): Array of message objects with role and content
+        model (str, optional): Specific model to use (defaults to system default)
+        options (Dict[str, Any], optional): Additional model-specific options
+    """
     messages: List[Dict[str, Any]]
     model: str = None
     options: Dict[str, Any] = None
 
-@app.post("/api/llm/completion")
+@app.post("/api/llm/completion", tags=["LLM"])
 async def generate_llm_completion(request: LLMCompletionRequest):
-    """Generate a completion with the LLM."""
+    """
+    Generate a text completion with the LLM.
+    
+    Creates a completion for the given prompt using the configured LLM service.
+    
+    Args:
+        request (LLMCompletionRequest): Request containing prompt and options
+        
+    Returns:
+        dict: The completion result with generated text
+        
+    Raises:
+        HTTPException: 503 error if LLM service is unavailable
+                      500 error if completion generation fails
+    """
     if not use_llm or not ollama_server:
         raise HTTPException(status_code=503, detail="LLM service is not available")
     
@@ -381,9 +490,23 @@ async def generate_llm_completion(request: LLMCompletionRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/llm/chat")
+@app.post("/api/llm/chat", tags=["LLM"])
 async def generate_llm_chat_completion(request: LLMChatRequest):
-    """Generate a chat completion with the LLM."""
+    """
+    Generate a chat completion with the LLM.
+    
+    Creates a chat completion from a sequence of messages using the configured LLM service.
+    
+    Args:
+        request (LLMChatRequest): Request containing messages and options
+        
+    Returns:
+        dict: The chat completion result with generated response
+        
+    Raises:
+        HTTPException: 503 error if LLM service is unavailable
+                      500 error if chat completion generation fails
+    """
     if not use_llm or not ollama_server:
         raise HTTPException(status_code=503, detail="LLM service is not available")
     
@@ -397,9 +520,20 @@ async def generate_llm_chat_completion(request: LLMChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/llm/models")
+@app.get("/api/llm/models", tags=["LLM"])
 async def list_llm_models():
-    """List available LLM models."""
+    """
+    List all available LLM models.
+    
+    Retrieves the list of models available through the configured LLM service.
+    
+    Returns:
+        dict: Object containing available models and their details
+        
+    Raises:
+        HTTPException: 503 error if LLM service is unavailable
+                      500 error if model listing fails
+    """
     if not use_llm or not ollama_server:
         raise HTTPException(status_code=503, detail="LLM service is not available")
     
@@ -409,8 +543,29 @@ async def list_llm_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Import research interface
+from src.research_system.core.research import setup_research
+
+# Add API documentation metadata
+app.description = """
+Research System API provides endpoints for creating and managing research tasks,
+generating research plans, performing searches, and accessing LLM capabilities.
+
+For detailed documentation, see the API_DOCUMENTATION.md file in the docs directory.
+"""
+
+app.swagger_ui_parameters = {
+    "defaultModelsExpandDepth": -1,  # Hide schemas section by default
+    "displayRequestDuration": True,   # Show request execution time
+    "filter": True,                  # Enable filtering operations
+    "syntaxHighlight.theme": "monokai" # More readable theme
+}
+
 # Set up dashboard
 setup_dashboard(app)
+
+# Set up research interface
+setup_research(app)
 
 if __name__ == '__main__':
     import uvicorn

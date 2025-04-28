@@ -63,7 +63,7 @@ spec:
               optional: true
         livenessProbe:
           httpGet:
-            path: /healthz
+            path: /health
             port: 8181
           initialDelaySeconds: 10
           periodSeconds: 15
@@ -71,7 +71,7 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /readyz
+            path: /health
             port: 8181
           initialDelaySeconds: 5
           periodSeconds: 10

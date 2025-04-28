@@ -60,8 +60,7 @@ Before deploying or pushing to git, perform the following tests:
 - [ ] Test PostgreSQL connectivity:
   ```bash
   # Check if the server responds
-  curl http://localhost:8181/healthz
-  curl http://localhost:8181/readyz
+  curl http://localhost:8181/health
   
   # Test operations with PostgreSQL
   ./app_manager.sh task create --title "PostgreSQL Test" --description "Testing PostgreSQL"
@@ -202,17 +201,17 @@ Solutions:
 2. Check connection string: `echo $DATABASE_URL`
 3. Verify credentials in environment variables
 
-### Health Check Failures
+### API Connectivity Issues
 
-If health checks fail:
+If you cannot reach the API endpoints:
 ```
-{"status": "not_ready", "dependencies": {"database": false}}
+curl: (7) Failed to connect to localhost port 8181
 ```
 
 Solution:
-1. Check database connectivity
-2. Verify environment variables are correctly set
-3. Check logs for specific errors: `./app_manager.sh logs`
+1. Verify the server is running: `./app_manager.sh status`
+2. Check server logs for errors: `./app_manager.sh logs`
+3. Ensure no port conflicts: `lsof -i :8181`
 
 ## Final Verification
 

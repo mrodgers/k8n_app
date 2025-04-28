@@ -10,6 +10,8 @@ A containerized Python microservices application built with FastAPI for automate
 - Kubernetes-native deployment
 - CLI interface for research operations
 - Web-based monitoring dashboard for system status
+- Research portal for task creation and management
+- LLM integration with Ollama for text generation
 - RESTful API for service integration
 
 ## Quick Start
@@ -131,9 +133,13 @@ The system includes a command-line interface for common operations:
 ./app_manager.sh task get --id <task-id>
 ```
 
-## Web Dashboard
+## Web Interfaces
 
-The system includes a web-based monitoring dashboard that provides real-time visibility into:
+The system includes two web-based interfaces: a monitoring dashboard and a research portal.
+
+### Dashboard
+
+The monitoring dashboard provides real-time visibility into:
 
 - System resource usage (CPU, memory, disk)
 - Agent status and registered tools
@@ -154,6 +160,31 @@ The dashboard also provides JSON API endpoints for programmatic access to monito
 - `/dashboard/api/database` - Database status and statistics
 - `/dashboard/api/tasks` - Recent research tasks
 - `/dashboard/api/results` - Recent research results
+
+### Research Portal
+
+The Research Portal provides a user-friendly interface for creating and managing research tasks:
+
+- Create new research tasks with titles, descriptions, and tags
+- View all research tasks with their status
+- Generate research plans
+- Execute searches
+- View research results
+
+To access the Research Portal:
+
+1. Start the server using `./app_manager.sh start` or deploy to Kubernetes
+2. Navigate to `http://localhost:8181/research/` in your browser
+
+The Research Portal interacts with the system through RESTful API endpoints:
+
+- `/api/tasks` - List or create research tasks
+- `/api/tasks/{task_id}` - Get a specific task
+- `/api/tasks/{task_id}/plan` - Create a research plan
+- `/api/tasks/{task_id}/search` - Execute a search for a task
+- `/api/tasks/{task_id}/results` - Get all results for a task
+
+For more details on the web interfaces, see [Web Interfaces Documentation](./docs/WEB_INTERFACES.md).
 
 ## Configuration
 
@@ -237,12 +268,16 @@ For more detailed information, see:
 - [Developer Documentation Guide](./docs/DEVELOPER_DOCUMENTATION_GUIDE.md)
 - [Research System Development Plan](./docs/RESEARCH_SYSTEM_DEV_PLAN.md)
 - [Architecture Documentation](./docs/architecture.md)
-- [API Documentation](./docs/api.md)
+- [API Documentation](./docs/API_DOCUMENTATION.md)
 - [Database Documentation](./docs/DATABASE.md)
 - [Database Testing Guide](./docs/DATABASE_TESTING.md)
+- [Health Monitoring](./docs/HEALTH_ENDPOINTS.md)
 - [Kubernetes Deployment Guide](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md)
 - [Deployment Checklist](./docs/DEPLOYMENT_CHECKLIST.md)
+- [Web Interfaces Documentation](./docs/WEB_INTERFACES.md)
+- [Implementation Summary](./docs/IMPLEMENTATION_SUMMARY.md)
 - [Monitoring Dashboard Guide](./docs/DASHBOARD.md)
+- [LLM Integration Guide](./docs/LLM_INTEGRATION.md)
 
 ## License
 
