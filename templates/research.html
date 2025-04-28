@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research System - Research Portal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <style>
+        .task-card {
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .task-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .result-card {
+            margin-bottom: 10px;
+            border-left: 4px solid #007bff;
+        }
+        .status-badge {
+            margin-left: 10px;
+        }
+        .status-pending {
+            background-color: #ffc107;
+        }
+        .status-in_progress {
+            background-color: #17a2b8;
+        }
+        .status-completed {
+            background-color: #28a745;
+        }
+        .status-failed {
+            background-color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row mb-4">
+            <div class="col">
+                <h1>Research Portal</h1>
+                <p class="text-muted">Create and manage your research tasks</p>
+            </div>
+            <div class="col-auto">
+                <a href="/dashboard/" class="btn btn-outline-secondary">Dashboard</a>
+            </div>
+        </div>
+
+        <!-- Create Research Task Form -->
+        <div class="row mb-4">
+            <div class="col">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Create New Research Task</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="research-form">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Research Title</label>
+                                <input type="text" class="form-control" id="title" placeholder="Enter a descriptive title" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Research Description</label>
+                                <textarea class="form-control" id="description" rows="3" placeholder="Describe what you want to research in detail" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="tags" class="form-label">Tags</label>
+                                <input type="text" class="form-control" id="tags" placeholder="Enter comma-separated tags (e.g., AI, science, health)">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Create Research Task</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Research Tasks -->
+        <div class="row">
+            <div class="col-lg-5">
+                <h2>Your Research Tasks</h2>
+                <div id="task-list" class="mt-3">
+                    <!-- Tasks will be populated here dynamically -->
+                    <div class="text-center py-5 text-muted" id="no-tasks-message">
+                        No research tasks yet. Create one to get started!
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-7">
+                <h2>Research Results</h2>
+                <div id="result-container" class="mt-3">
+                    <!-- Task details and results will be shown here -->
+                    <div class="text-center py-5 text-muted" id="select-task-message">
+                        Select a task to view its results
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Task template (used by JavaScript) -->
+    <template id="task-template">
+        <div class="card task-card" data-task-id="">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <span class="task-title"></span>
+                    <span class="badge status-badge"></span>
+                </h5>
+                <p class="card-text task-description"></p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted task-date"></small>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary view-results-btn">View Results</button>
+                        <button class="btn btn-sm btn-outline-success create-plan-btn">Create Plan</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Result template (used by JavaScript) -->
+    <template id="result-template">
+        <div class="card result-card" data-result-id="">
+            <div class="card-body">
+                <h5 class="card-title result-title"></h5>
+                <p class="card-text result-content"></p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted result-date"></small>
+                    <span class="badge result-format"></span>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Task detail template (used by JavaScript) -->
+    <template id="task-detail-template">
+        <div class="card mb-4" data-task-id="">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <span class="detail-task-title"></span>
+                    <span class="badge status-badge float-end"></span>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="detail-task-description"></p>
+                <div class="mb-3">
+                    <strong>Tags:</strong> <span class="detail-task-tags"></span>
+                </div>
+                <div class="mb-3">
+                    <strong>Created:</strong> <span class="detail-task-date"></span>
+                </div>
+                
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-primary run-search-btn me-2">Run Search</button>
+                    <button class="btn btn-success create-plan-btn">Create Plan</button>
+                </div>
+            </div>
+        </div>
+        
+        <h4>Research Results</h4>
+        <div class="detail-results-container">
+            <!-- Results will be populated here -->
+            <div class="text-center py-3 text-muted no-results-message">
+                No results yet. Run a search or create a plan to generate results.
+            </div>
+        </div>
+    </template>
+
+    <script>
+        // DOM elements
+        const researchForm = document.getElementById('research-form');
+        const taskList = document.getElementById('task-list');
+        const resultContainer = document.getElementById('result-container');
+        const noTasksMessage = document.getElementById('no-tasks-message');
+        const selectTaskMessage = document.getElementById('select-task-message');
+        
+        // Templates
+        const taskTemplate = document.getElementById('task-template');
+        const resultTemplate = document.getElementById('result-template');
+        const taskDetailTemplate = document.getElementById('task-detail-template');
+        
+        // API endpoints
+        const API = {
+            tasks: '/api/tasks',
+            task: (id) => `/api/tasks/${id}`,
+            plan: (id) => `/api/tasks/${id}/plan`,
+            search: (id) => `/api/tasks/${id}/search`,
+            results: (id) => `/api/tasks/${id}/results`
+        };
+        
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load tasks on page load
+            loadTasks();
+            
+            // Handle form submission
+            researchForm.addEventListener('submit', createTask);
+            
+            // Event delegation for task actions
+            taskList.addEventListener('click', handleTaskAction);
+            resultContainer.addEventListener('click', handleResultAction);
+        });
+        
+        // Load all tasks
+        async function loadTasks() {
+            try {
+                const response = await fetch(API.tasks);
+                const data = await response.json();
+                
+                if (data.tasks && data.tasks.length > 0) {
+                    noTasksMessage.style.display = 'none';
+                    renderTasks(data.tasks);
+                } else {
+                    noTasksMessage.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+                alert('Failed to load research tasks. Please try again.');
+            }
+        }
+        
+        // Render tasks in the list
+        function renderTasks(tasks) {
+            // Clear existing tasks
+            while (taskList.firstChild && taskList.firstChild !== noTasksMessage) {
+                taskList.removeChild(taskList.firstChild);
+            }
+            
+            // Sort tasks by creation date (newest first)
+            tasks.sort((a, b) => b.created_at - a.created_at);
+            
+            // Add each task to the list
+            tasks.forEach(task => {
+                const taskElement = createTaskElement(task);
+                taskList.appendChild(taskElement);
+            });
+        }
+        
+        // Create a task element from template
+        function createTaskElement(task) {
+            const clone = taskTemplate.content.cloneNode(true);
+            
+            const taskCard = clone.querySelector('.task-card');
+            taskCard.dataset.taskId = task.id;
+            
+            const title = clone.querySelector('.task-title');
+            title.textContent = task.title;
+            
+            const status = clone.querySelector('.status-badge');
+            status.textContent = task.status;
+            status.classList.add(`status-${task.status}`);
+            
+            const description = clone.querySelector('.task-description');
+            description.textContent = task.description.substring(0, 100) + (task.description.length > 100 ? '...' : '');
+            
+            const date = clone.querySelector('.task-date');
+            date.textContent = formatDate(task.created_at);
+            
+            return clone;
+        }
+        
+        // Create a new task
+        async function createTask(event) {
+            event.preventDefault();
+            
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const tagsInput = document.getElementById('tags').value;
+            const tags = tagsInput ? tagsInput.split(',').map(tag => tag.trim()) : [];
+            
+            try {
+                const response = await fetch(API.tasks, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title, description, tags })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Add the new task to the list
+                    noTasksMessage.style.display = 'none';
+                    const taskElement = createTaskElement(data.task);
+                    taskList.insertBefore(taskElement, taskList.firstChild);
+                    
+                    // Clear the form
+                    researchForm.reset();
+                    
+                    // Show the new task detail
+                    showTaskDetail(data.task);
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to create task');
+                }
+            } catch (error) {
+                console.error('Error creating task:', error);
+                alert(error.message || 'Failed to create research task. Please try again.');
+            }
+        }
+        
+        // Handle task actions (view results, create plan)
+        async function handleTaskAction(event) {
+            const viewResultsBtn = event.target.closest('.view-results-btn');
+            const createPlanBtn = event.target.closest('.create-plan-btn');
+            const taskCard = event.target.closest('.task-card');
+            
+            if (!taskCard) return;
+            
+            const taskId = taskCard.dataset.taskId;
+            
+            if (viewResultsBtn) {
+                // Fetch and show task details with results
+                const task = await fetchTask(taskId);
+                if (task) {
+                    showTaskDetail(task);
+                }
+            } else if (createPlanBtn) {
+                // Create a plan for this task
+                await createPlan(taskId);
+            } else {
+                // Clicking on the card should also show details
+                const task = await fetchTask(taskId);
+                if (task) {
+                    showTaskDetail(task);
+                }
+            }
+        }
+        
+        // Handle result actions
+        function handleResultAction(event) {
+            const runSearchBtn = event.target.closest('.run-search-btn');
+            const createPlanBtn = event.target.closest('.create-plan-btn');
+            
+            if (runSearchBtn) {
+                const taskDetailCard = event.target.closest('.card');
+                const taskId = taskDetailCard.dataset.taskId;
+                runSearch(taskId);
+            } else if (createPlanBtn) {
+                const taskDetailCard = event.target.closest('.card');
+                const taskId = taskDetailCard.dataset.taskId;
+                createPlan(taskId);
+            }
+        }
+        
+        // Fetch a single task by ID
+        async function fetchTask(taskId) {
+            try {
+                const response = await fetch(API.task(taskId));
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.task;
+                } else {
+                    throw new Error('Failed to fetch task');
+                }
+            } catch (error) {
+                console.error('Error fetching task:', error);
+                alert('Failed to load task details. Please try again.');
+                return null;
+            }
+        }
+        
+        // Show task details and results
+        async function showTaskDetail(task) {
+            selectTaskMessage.style.display = 'none';
+            
+            // Clear current content
+            while (resultContainer.firstChild && resultContainer.firstChild !== selectTaskMessage) {
+                resultContainer.removeChild(resultContainer.firstChild);
+            }
+            
+            // Create task detail from template
+            const clone = taskDetailTemplate.content.cloneNode(true);
+            
+            const detailCard = clone.querySelector('.card');
+            detailCard.dataset.taskId = task.id;
+            
+            const title = clone.querySelector('.detail-task-title');
+            title.textContent = task.title;
+            
+            const status = clone.querySelector('.status-badge');
+            status.textContent = task.status;
+            status.classList.add(`status-${task.status}`);
+            
+            const description = clone.querySelector('.detail-task-description');
+            description.textContent = task.description;
+            
+            const tags = clone.querySelector('.detail-task-tags');
+            tags.textContent = task.tags.join(', ') || 'None';
+            
+            const date = clone.querySelector('.detail-task-date');
+            date.textContent = formatDate(task.created_at);
+            
+            resultContainer.appendChild(clone);
+            
+            // Load results for this task
+            await loadResults(task.id);
+        }
+        
+        // Load results for a task
+        async function loadResults(taskId) {
+            try {
+                // Fetch results for this task from the backend
+                const response = await fetch(API.results(taskId));
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const resultsContainer = document.querySelector('.detail-results-container');
+                    const noResultsMessage = document.querySelector('.no-results-message');
+                    
+                    if (data.results && data.results.length > 0) {
+                        noResultsMessage.style.display = 'none';
+                        
+                        // Render each result
+                        data.results.forEach(result => {
+                            const resultElement = createResultElement(result);
+                            resultsContainer.appendChild(resultElement);
+                        });
+                    } else {
+                        noResultsMessage.style.display = 'block';
+                    }
+                } else {
+                    throw new Error('Failed to load results');
+                }
+            } catch (error) {
+                console.error('Error loading results:', error);
+                // No need to show an alert, just show the no results message
+                document.querySelector('.no-results-message').style.display = 'block';
+            }
+        }
+        
+        // Create a result element from template
+        function createResultElement(result) {
+            const clone = resultTemplate.content.cloneNode(true);
+            
+            const resultCard = clone.querySelector('.result-card');
+            resultCard.dataset.resultId = result.id;
+            
+            const title = clone.querySelector('.result-title');
+            title.textContent = getResultTitle(result);
+            
+            const content = clone.querySelector('.result-content');
+            
+            // Handle different result formats
+            if (result.format === 'json') {
+                try {
+                    const jsonContent = JSON.parse(result.content);
+                    if (Array.isArray(jsonContent)) {
+                        content.textContent = `${jsonContent.length} items found`;
+                    } else {
+                        content.textContent = Object.keys(jsonContent).join(', ');
+                    }
+                } catch (e) {
+                    content.textContent = result.content.substring(0, 150) + '...';
+                }
+            } else {
+                content.textContent = result.content.substring(0, 150) + '...';
+            }
+            
+            const date = clone.querySelector('.result-date');
+            date.textContent = formatDate(result.created_at);
+            
+            const format = clone.querySelector('.result-format');
+            format.textContent = result.format;
+            
+            return clone;
+        }
+        
+        // Get a title for a result
+        function getResultTitle(result) {
+            if (result.metadata && result.metadata.title) {
+                return result.metadata.title;
+            }
+            
+            if (result.tags && result.tags.length > 0) {
+                return result.tags.join(' - ');
+            }
+            
+            if (result.format === 'json') {
+                return 'Search Results';
+            } else if (result.format === 'text') {
+                return 'Research Content';
+            } else if (result.format === 'html') {
+                return 'Web Content';
+            }
+            
+            return `Result #${result.id.substring(0, 8)}`;
+        }
+        
+        // Create a research plan for a task
+        async function createPlan(taskId) {
+            try {
+                const response = await fetch(API.plan(taskId), {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert('Research plan created successfully!');
+                    
+                    // Refresh the task to show updated status
+                    const task = await fetchTask(taskId);
+                    if (task) {
+                        // Update the task in the list
+                        const taskCard = taskList.querySelector(`.task-card[data-task-id="${taskId}"]`);
+                        if (taskCard) {
+                            const statusBadge = taskCard.querySelector('.status-badge');
+                            statusBadge.textContent = task.status;
+                            statusBadge.className = 'badge status-badge';
+                            statusBadge.classList.add(`status-${task.status}`);
+                        }
+                        
+                        // Update the detail view if it's currently shown
+                        showTaskDetail(task);
+                    }
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to create plan');
+                }
+            } catch (error) {
+                console.error('Error creating plan:', error);
+                alert(error.message || 'Failed to create research plan. Please try again.');
+            }
+        }
+        
+        // Run a search for a task
+        async function runSearch(taskId) {
+            const query = prompt('Enter your search query:');
+            if (!query) return;
+            
+            try {
+                const response = await fetch(API.search(taskId), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ query, max_results: 10 })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(`Search completed with ${data.results.length} results!`);
+                    
+                    // Refresh the task detail view to show new results
+                    const task = await fetchTask(taskId);
+                    if (task) {
+                        showTaskDetail(task);
+                    }
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Failed to run search');
+                }
+            } catch (error) {
+                console.error('Error running search:', error);
+                alert(error.message || 'Failed to run search. Please try again.');
+            }
+        }
+        
+        // Format timestamp as a readable date
+        function formatDate(timestamp) {
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+    </script>
+</body>
+</html>
