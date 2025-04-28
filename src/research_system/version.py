@@ -24,7 +24,7 @@ __version__ = "1.0.0"
 
 # Build number - incremented with each release or significant update
 # This should be updated using a CI/CD pipeline or release script
-BUILD_NUMBER = "001"
+BUILD_NUMBER = "002"
 
 # Build date - automatically set to current date when package is built
 BUILD_DATE = datetime.datetime.now().strftime("%Y-%m-%d")

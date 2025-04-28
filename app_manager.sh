@@ -393,19 +393,12 @@ build_app() {
 
 # Function to show the current version
 show_version() {
-    if [ -f "src/research_system/version.py" ]; then
+    if [ -f "scripts/version_info.py" ]; then
         echo -e "${BLUE}Research System Version Information:${NC}"
-        python -c "
-from src.research_system.version import get_version_info
-info = get_version_info()
-print(f'  Version:      {info[\"version\"]}')
-print(f'  Build Number: {info[\"build_number\"]}')
-print(f'  Build Date:   {info[\"build_date\"]}')
-print(f'  Git Revision: {info[\"git_revision\"] or \"N/A\"}')
-"
+        python scripts/version_info.py
     else
         echo -e "${RED}Version information not available${NC}"
-        echo -e "Version module not found at src/research_system/version.py"
+        echo -e "Version script not found at scripts/version_info.py"
         return 1
     fi
 }
