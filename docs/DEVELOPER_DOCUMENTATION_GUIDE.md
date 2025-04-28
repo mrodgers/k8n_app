@@ -16,6 +16,8 @@ These documents represent the current state of the project and should be reviewe
 | [api.md](/docs/api.md) | API documentation | High |
 | [DATABASE.md](/docs/DATABASE.md) | Database implementation and configuration | High |
 | [DATABASE_TESTING.md](/docs/DATABASE_TESTING.md) | Database testing best practices | High |
+| [KUBERNETES_DEPLOYMENT_GUIDE.md](/docs/KUBERNETES_DEPLOYMENT_GUIDE.md) | Kubernetes deployment instructions | High |
+| [DEPLOYMENT_CHECKLIST.md](/docs/DEPLOYMENT_CHECKLIST.md) | Database deployment checklist | Medium |
 | [CODE_REVIEW_202504270919pacific.md](/docs/CODE_REVIEW_202504270919pacific.md) | Latest code review (April 27, 2025) | Medium |
 | [claude_code_advice.md](/docs/claude_code_advice.md) | Code development best practices | Medium |
 | [CONTRIBUTING.md](/docs/CONTRIBUTING.md) | Guidelines for project contributions | Medium |
@@ -47,7 +49,6 @@ The following documentation would be valuable additions to the project:
 
 | Document | Purpose | Priority |
 |----------|---------|----------|
-| Kubernetes Deployment Guide | Detailed instructions for K8s deployment | Medium |
 | Development Environment Setup | Local development environment configuration | Medium |
 
 ## Documentation Update Process

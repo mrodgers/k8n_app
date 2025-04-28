@@ -39,6 +39,36 @@ A containerized Python microservices application built with FastAPI for automate
 
 ### Kubernetes Deployment
 
+#### Using the k8s_manager.sh Script (Recommended)
+
+Our `k8s_manager.sh` script automates the entire Kubernetes deployment process:
+
+1. **Setup environment**:
+   ```bash
+   ./scripts/k8s_manager.sh setup
+   ```
+
+2. **Start Kubernetes**:
+   ```bash
+   ./scripts/k8s_manager.sh start
+   ```
+
+3. **Deploy the Research System**:
+   ```bash
+   ./scripts/k8s_manager.sh deploy
+   ```
+
+4. **Verify deployment**:
+   ```bash
+   ./scripts/k8s_manager.sh status
+   ```
+
+For more details, see the [Kubernetes Deployment Guide](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md).
+
+#### Manual Deployment
+
+If you prefer to deploy manually:
+
 1. **Deploy PostgreSQL**:
    ```bash
    kubectl apply -f kubernetes/secrets.yaml
@@ -153,7 +183,9 @@ k8s-python-app-new/
 │   ├── secrets.yaml
 │   └── service.yaml
 ├── scripts/                 # Helper scripts
-│   └── setup_db.sh          # Database setup
+│   ├── setup_db.sh          # Database setup
+│   └── k8s_manager.sh       # Kubernetes management
+├── app_manager.sh           # Application management
 ├── src/                     # Application source
 │   ├── app.py               # Main entry point
 │   └── research_system/     # Core components
@@ -171,6 +203,8 @@ For more detailed information, see:
 - [API Documentation](./docs/api.md)
 - [Database Documentation](./docs/DATABASE.md)
 - [Database Testing Guide](./docs/DATABASE_TESTING.md)
+- [Kubernetes Deployment Guide](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md)
+- [Deployment Checklist](./docs/DEPLOYMENT_CHECKLIST.md)
 
 ## License
 
