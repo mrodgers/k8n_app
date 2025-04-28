@@ -8,20 +8,22 @@ providing both HTTP endpoints and a foundation for the FastMCP servers.
 import logging
 import os
 import time
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional, Union
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import yaml
 
 # Import research system components
 from src.research_system.core.server import FastMCPServer, Context
 from src.research_system.core.coordinator import Coordinator, default_coordinator
+from src.research_system.core.dashboard import setup_dashboard
 from src.research_system.agents.planner import PlannerAgent, default_planner
 from src.research_system.agents.search import SearchAgent, default_search
 from src.research_system.models.db import Database, default_db
 from src.research_system.models.db_config import load_config as load_db_config
-from src.research_system.llm import create_ollama_client
+from src.research_system.llm import create_ollama_client, OllamaServer
 
 # Configure logging
 logging.basicConfig(
@@ -64,6 +66,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Create static files directory if it doesn't exist
+static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+os.makedirs(static_dir, exist_ok=True)
+
+# Mount static files directory
+try:
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+except Exception as e:
+    logger.warning(f"Could not mount static files: {e}")
+
 # Set up core components
 main_server = FastMCPServer("Research System API", config)
 coordinator = default_coordinator
@@ -74,8 +86,9 @@ use_llm = llm_config.get("enabled", True)
 ollama_model = llm_config.get("model") or os.environ.get("OLLAMA_MODEL", "gemma3:1b")
 ollama_url = llm_config.get("url") or os.environ.get("OLLAMA_URL")
 
-# Initialize LLM client
+# Initialize LLM services
 llm_client = None
+ollama_server = None
 if use_llm:
     try:
         # Try to initialize LLM client
@@ -84,9 +97,37 @@ if use_llm:
             base_url=ollama_url,
             timeout=llm_config.get("timeout", 120)
         )
-        logger.info(f"Initialized LLM client using model: {ollama_model}")
+        
+        # Initialize the Ollama FastMCP server
+        ollama_server = OllamaServer(
+            name="ollama",
+            server=main_server,  # Register tools with the main server
+            config={
+                "model": ollama_model,
+                "url": ollama_url,
+                "timeout": llm_config.get("timeout", 120)
+            }
+        )
+        
+        logger.info(f"Initialized LLM services using model: {ollama_model}")
+        
+        # Register Ollama as a FastMCP agent with the coordinator
+        coordinator.register_agent({
+            "name": "ollama",
+            "server_url": "http://localhost:8080",
+            "description": "LLM agent for generating text and embeddings",
+            "tools": [
+                "generate_completion", 
+                "generate_chat_completion", 
+                "generate_embeddings",
+                "extract_content",
+                "assess_relevance",
+                "generate_plan"
+            ]
+        })
+        logger.info("Registered Ollama as a FastMCP agent with the coordinator")
     except Exception as e:
-        logger.warning(f"Failed to initialize LLM client: {e}")
+        logger.warning(f"Failed to initialize LLM services: {e}")
         logger.warning("Research System will operate without LLM capabilities")
         use_llm = False
 
@@ -173,10 +214,10 @@ async def readiness_probe():
         services_status["database"] = False
     
     # Check LLM connectivity if enabled
-    if use_llm and llm_client:
+    if use_llm and ollama_server:
         try:
-            # Test LLM client with a version check (lightweight operation)
-            version_info = llm_client.get_version()
+            # Test Ollama server with a version check (lightweight operation)
+            version_info = ollama_server.get_version()
             if version_info and "version" in version_info:
                 services_status["llm"] = True
                 logger.debug(f"LLM readiness check successful. Ollama version: {version_info['version']}")
@@ -215,17 +256,41 @@ async def health_check():
 @app.get("/")
 async def root():
     """Root endpoint with basic system info."""
+    services = ["planner", "search", "coordinator"]
+    if ollama_server:
+        services.append("ollama")
+    
+    # Get LLM info if available
+    llm_info = {
+        "enabled": use_llm,
+        "model": ollama_model if use_llm else None
+    }
+    
+    if ollama_server:
+        try:
+            # Add detailed LLM info if available
+            version_info = ollama_server.get_version()
+            llm_info["version"] = version_info.get("version")
+            llm_info["server_type"] = "FastMCP"
+            llm_info["available_tools"] = [
+                "generate_completion", 
+                "generate_chat_completion",
+                "generate_embeddings",
+                "extract_content",
+                "assess_relevance",
+                "generate_plan"
+            ]
+        except Exception as e:
+            logger.error(f"Error getting LLM version info: {e}")
+    
     return {
         "message": "Research System API",
         "version": "1.0.0",
         "environment": config.get("environment", "development"),
-        "llm": {
-            "enabled": use_llm,
-            "model": ollama_model if use_llm else None
-        },
+        "llm": llm_info,
         "components": {
             "agents": coordinator.list_agents(),
-            "services": ["planner", "search", "coordinator"]
+            "services": services
         }
     }
 
@@ -286,6 +351,66 @@ async def get_result(result_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Result not found")
     return {"result": result.to_dict()}
+
+# LLM direct access endpoints
+class LLMCompletionRequest(BaseModel):
+    prompt: str
+    model: str = None
+    system: str = None
+    options: Dict[str, Any] = None
+
+class LLMChatRequest(BaseModel):
+    messages: List[Dict[str, Any]]
+    model: str = None
+    options: Dict[str, Any] = None
+
+@app.post("/api/llm/completion")
+async def generate_llm_completion(request: LLMCompletionRequest):
+    """Generate a completion with the LLM."""
+    if not use_llm or not ollama_server:
+        raise HTTPException(status_code=503, detail="LLM service is not available")
+    
+    try:
+        result = ollama_server.generate_completion(
+            prompt=request.prompt,
+            model=request.model,
+            system=request.system,
+            options=request.options
+        )
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/llm/chat")
+async def generate_llm_chat_completion(request: LLMChatRequest):
+    """Generate a chat completion with the LLM."""
+    if not use_llm or not ollama_server:
+        raise HTTPException(status_code=503, detail="LLM service is not available")
+    
+    try:
+        result = ollama_server.generate_chat_completion(
+            messages=request.messages,
+            model=request.model,
+            options=request.options
+        )
+        return {"result": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/llm/models")
+async def list_llm_models():
+    """List available LLM models."""
+    if not use_llm or not ollama_server:
+        raise HTTPException(status_code=503, detail="LLM service is not available")
+    
+    try:
+        models = ollama_server.list_models()
+        return models
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Set up dashboard
+setup_dashboard(app)
 
 if __name__ == '__main__':
     import uvicorn

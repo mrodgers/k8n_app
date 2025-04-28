@@ -9,6 +9,8 @@ A containerized Python microservices application built with FastAPI for automate
 - Search capabilities with Brave Search API
 - Kubernetes-native deployment
 - CLI interface for research operations
+- Web-based monitoring dashboard for system status
+- RESTful API for service integration
 
 ## Quick Start
 
@@ -129,6 +131,30 @@ The system includes a command-line interface for common operations:
 ./app_manager.sh task get --id <task-id>
 ```
 
+## Web Dashboard
+
+The system includes a web-based monitoring dashboard that provides real-time visibility into:
+
+- System resource usage (CPU, memory, disk)
+- Agent status and registered tools
+- Database connection and statistics
+- Research tasks and results
+
+To access the dashboard:
+
+1. Start the server using `./app_manager.sh start` or deploy to Kubernetes
+2. Navigate to `http://localhost:8181/dashboard/` in your browser
+3. The dashboard automatically refreshes every 10 seconds
+
+The dashboard also provides JSON API endpoints for programmatic access to monitoring data:
+
+- `/dashboard/api/status` - Complete system status
+- `/dashboard/api/agents` - Agent information
+- `/dashboard/api/system` - System resource usage
+- `/dashboard/api/database` - Database status and statistics
+- `/dashboard/api/tasks` - Recent research tasks
+- `/dashboard/api/results` - Recent research results
+
 ## Configuration
 
 The system can be configured using:
@@ -184,11 +210,22 @@ k8s-python-app-new/
 │   └── service.yaml
 ├── scripts/                 # Helper scripts
 │   ├── setup_db.sh          # Database setup
-│   └── k8s_manager.sh       # Kubernetes management
+│   ├── k8s_manager.sh       # Kubernetes management
+│   └── ollama/              # Ollama LLM utilities
 ├── app_manager.sh           # Application management
 ├── src/                     # Application source
 │   ├── app.py               # Main entry point
 │   └── research_system/     # Core components
+│       ├── agents/          # Agent implementations
+│       ├── cli/             # CLI interface
+│       ├── core/            # Core system components
+│       │   ├── coordinator.py
+│       │   ├── dashboard.py # Monitoring dashboard
+│       │   └── server.py
+│       ├── llm/             # LLM integration
+│       └── models/          # Data models
+├── static/                  # Static assets for web UI
+├── templates/               # HTML templates for web UI
 ├── tests/                   # Test suite
 └── requirements.txt         # Dependencies
 ```
@@ -205,6 +242,7 @@ For more detailed information, see:
 - [Database Testing Guide](./docs/DATABASE_TESTING.md)
 - [Kubernetes Deployment Guide](./docs/KUBERNETES_DEPLOYMENT_GUIDE.md)
 - [Deployment Checklist](./docs/DEPLOYMENT_CHECKLIST.md)
+- [Monitoring Dashboard Guide](./docs/DASHBOARD.md)
 
 ## License
 

@@ -1,0 +1,91 @@
+/* Additional styles for the dashboard */
+
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-active {
+    background-color: #28a745;
+}
+
+.status-error {
+    background-color: #dc3545;
+}
+
+.status-unknown {
+    background-color: #ffc107;
+}
+
+.status-unreachable {
+    background-color: #6c757d;
+}
+
+.refresh-btn {
+    margin-left: 15px;
+}
+
+.system-metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+/* Animation for refresh icon */
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.rotate {
+    display: inline-block;
+    animation: rotate 1s linear infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .card-header .badge {
+        margin-top: 8px;
+    }
+}
+
+/* Table row hover effect */
+.table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background-color: rgba(0,0,0,0.03);
+}
+
+/* Additional container padding */
+.container {
+    padding-bottom: 50px;
+}
+
+/* Footer */
+.dashboard-footer {
+    margin-top: 50px;
+    padding-top: 20px;
+    border-top: 1px solid #dee2e6;
+    text-align: center;
+    font-size: 0.85em;
+    color: #6c757d;
+}

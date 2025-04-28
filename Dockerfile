@@ -2,8 +2,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install curl for health checks
-RUN apt-get update && apt-get install -y curl && \
+# Install curl for health checks and gcc for building psutil
+RUN apt-get update && apt-get install -y curl gcc python3-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
@@ -24,6 +24,9 @@ EXPOSE 8181
 
 # Switch to non-root user
 USER appuser
+
+# Set correct Python path
+ENV PYTHONPATH=/app
 
 # Start FastAPI app with uvicorn
 CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "8181"]
