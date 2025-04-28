@@ -2,7 +2,8 @@
 Search Agent for the Research System.
 
 This module implements a specialized FastMCP agent for search functionality,
-demonstrating external API integration and LLM sampling for content extraction.
+integrating external search APIs and leveraging Ollama LLMs for content
+extraction, result filtering, and relevance ranking.
 """
 
 import logging
@@ -10,6 +11,7 @@ import time
 import uuid
 import json
 import requests
+import asyncio
 from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 import os
@@ -17,6 +19,7 @@ from urllib.parse import urlencode
 
 from src.research_system.core.server import FastMCPServer, Context
 from src.research_system.models.db import ResearchTask, ResearchResult, default_db
+from src.research_system.llm import create_ollama_client
 
 # Configure logging
 logging.basicConfig(
@@ -76,6 +79,25 @@ class SearchAgent:
         # Ensure API key is available
         if not self.api_key:
             logger.warning(f"Brave Search API key not provided for {name} agent")
+        
+        # LLM configuration
+        self.use_llm = self.config.get("use_llm", True)
+        self.ollama_model = self.config.get("ollama_model") or os.environ.get("SEARCH_LLM_MODEL", "gemma3:1b")
+        
+        # Initialize LLM client if enabled
+        self.llm_client = None
+        if self.use_llm:
+            try:
+                self.llm_client = create_ollama_client(
+                    async_client=False,
+                    base_url=self.config.get("ollama_url") or os.environ.get("OLLAMA_URL"),
+                    timeout=self.config.get("ollama_timeout", 120)
+                )
+                logger.info(f"LLM client initialized for {name} agent using model: {self.ollama_model}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LLM client for {name} agent: {e}")
+                logger.warning("The agent will fall back to rule-based processing")
+                self.use_llm = False
         
         # Store queries and results
         self.queries = {}
@@ -254,6 +276,9 @@ class SearchAgent:
         """
         Extract content from a URL.
         
+        This method fetches content from a URL and uses an LLM to extract and summarize
+        relevant information, or falls back to simple HTML parsing if LLM is unavailable.
+        
         Args:
             url: The URL to extract content from.
             context: Optional context for tracking progress.
@@ -279,40 +304,104 @@ class SearchAgent:
                 raise Exception(error_msg)
             
             # Get the content
-            content = response.text
+            html_content = response.text
             
             if context:
-                context.update_progress(0.5, "Processing content")
+                context.update_progress(0.3, "Parsing HTML content")
             
-            # In a real implementation, this would use an LLM to extract relevant content
-            # For now, we'll just return a simplified version of the HTML content
-            
-            # Simple extraction logic (this would be replaced by LLM-based extraction)
-            import re
+            # Parse HTML with BeautifulSoup (needed for both LLM and non-LLM paths)
             from bs4 import BeautifulSoup
-            
-            # Parse HTML
-            soup = BeautifulSoup(content, 'html.parser')
+            soup = BeautifulSoup(html_content, 'html.parser')
             
             # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.extract()
             
-            # Get text
-            text = soup.get_text()
+            # Extract basic text
+            raw_text = soup.get_text()
             
+            # Clean up the text
+            import re
             # Break into lines and remove leading and trailing space
-            lines = (line.strip() for line in text.splitlines())
+            lines = (line.strip() for line in raw_text.splitlines())
             # Break multi-headlines into a line each
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             # Remove blank lines
-            text = '\n'.join(chunk for chunk in chunks if chunk)
+            cleaned_text = '\n'.join(chunk for chunk in chunks if chunk)
+            
+            # Truncate if too long (to avoid overwhelming the LLM)
+            MAX_TEXT_LENGTH = 12000
+            if len(cleaned_text) > MAX_TEXT_LENGTH:
+                cleaned_text = cleaned_text[:MAX_TEXT_LENGTH] + "...[content truncated]"
             
             if context:
-                context.update_progress(1.0, "Content extraction completed")
+                context.update_progress(0.5, "Extracting relevant content")
             
-            return text
-        
+            # Use LLM if available, otherwise return the cleaned text
+            if self.use_llm and self.llm_client:
+                try:
+                    # Create prompts for the LLM
+                    system_prompt = """
+                    You are a content extraction assistant. Your job is to extract and summarize
+                    the most relevant information from web pages. Focus on identifying the main
+                    content while removing navigation elements, advertisements, footers, and other
+                    non-essential parts.
+                    
+                    Your summary should:
+                    1. Identify the main topic or purpose of the page
+                    2. Extract key facts, claims, or arguments
+                    3. Preserve any important statistics, quotes, or references
+                    4. Be well-structured and organized by themes or topics
+                    5. Be comprehensive but concise (around 500-1000 words)
+                    """
+                    
+                    user_prompt = f"""
+                    Extract and summarize the relevant content from this web page:
+                    
+                    URL: {url}
+                    
+                    RAW CONTENT:
+                    {cleaned_text[:8000]}
+                    """  # Truncate further for user prompt
+                    
+                    if context:
+                        context.update_progress(0.6, "Querying LLM for content extraction")
+                    
+                    # Generate completion with Ollama
+                    response = self.llm_client.generate_chat_completion(
+                        model=self.ollama_model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt}
+                        ],
+                        stream=False
+                    )
+                    
+                    # Extract the generated content
+                    extracted_content = response.get("message", {}).get("content", "")
+                    
+                    if not extracted_content or len(extracted_content) < 100:
+                        logger.warning("LLM returned insufficient content, falling back to basic extraction")
+                        extracted_content = cleaned_text
+                    else:
+                        logger.info(f"Successfully extracted content from {url} using LLM")
+                    
+                    if context:
+                        context.update_progress(1.0, "Content extraction completed")
+                    
+                    return extracted_content
+                    
+                except Exception as e:
+                    logger.error(f"Error extracting content with LLM: {e}")
+                    if context:
+                        context.log_error(f"Error using LLM for extraction, falling back to basic extraction: {e}")
+                    return cleaned_text
+            else:
+                # Basic extraction without LLM
+                if context:
+                    context.update_progress(1.0, "Basic content extraction completed")
+                return cleaned_text
+            
         except Exception as e:
             error_msg = f"Error extracting content from {url}: {e}"
             logger.error(error_msg)
@@ -323,6 +412,10 @@ class SearchAgent:
     def filter_relevant_results(self, results: List[Dict], query: str) -> List[Dict]:
         """
         Filter search results based on relevance to the query.
+        
+        This method uses an LLM to evaluate and filter search results for
+        relevance to the original query, or falls back to keyword matching
+        if LLM is unavailable.
         
         Args:
             results: List of search result dictionaries.
@@ -342,8 +435,129 @@ class SearchAgent:
             else:
                 search_results.append(result)
         
-        # In a real implementation, this would use an LLM to score relevance
-        # For now, we'll use a simple keyword matching approach
+        # Use LLM if available, otherwise use keyword matching
+        if self.use_llm and self.llm_client:
+            try:
+                # Create a system prompt for the LLM
+                system_prompt = """
+                You are a search result evaluation assistant. Your job is to analyze search results
+                and determine if they are relevant to the original search query.
+                
+                For each result, provide:
+                1. A relevance score from 0.0 to 1.0 (where 1.0 is highly relevant)
+                2. A brief justification for this score
+                
+                Be critical and precise - many search results may be technically related but not 
+                truly relevant to answering the original query.
+                """
+                
+                # Format the results for the LLM
+                results_text = ""
+                for i, result in enumerate(search_results):
+                    results_text += f"""
+                    Result #{i+1}:
+                    Title: {result.title}
+                    Snippet: {result.snippet}
+                    URL: {result.url}
+                    """
+                
+                user_prompt = f"""
+                Original search query: "{query}"
+                
+                Evaluate the following search results for relevance to this query:
+                
+                {results_text}
+                
+                Return your evaluation as a JSON array with objects containing:
+                - result_id: the # of the result
+                - relevance_score: a float between 0.0 and 1.0
+                - justification: a brief explanation for this score
+                
+                Only return the JSON array, nothing else.
+                """
+                
+                # Generate completion with Ollama
+                response = self.llm_client.generate_chat_completion(
+                    model=self.ollama_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    stream=False
+                )
+                
+                # Extract the generated content
+                generated_content = response.get("message", {}).get("content", "")
+                
+                # Parse the JSON response
+                import json
+                import re
+                
+                # Try to extract JSON from the response
+                json_match = re.search(r'\[\s*{.*}\s*\]', generated_content, re.DOTALL)
+                if json_match:
+                    evaluations = json.loads(json_match.group(0))
+                else:
+                    # Try alternative extraction if the response isn't valid JSON
+                    logger.warning("Failed to parse LLM response as JSON, trying alternative extraction")
+                    # Fall back to simple relevance extraction
+                    evaluations = []
+                    pattern = r'Result #(\d+).*?relevance_score.*?(\d+\.\d+)'
+                    matches = re.finditer(pattern, generated_content, re.DOTALL)
+                    for match in matches:
+                        try:
+                            result_id = int(match.group(1))
+                            score = float(match.group(2))
+                            evaluations.append({"result_id": result_id, "relevance_score": score})
+                        except (ValueError, IndexError):
+                            continue
+                
+                # If we still don't have valid evaluations, fall back to keyword matching
+                if not evaluations:
+                    logger.warning("Failed to extract relevance evaluations, falling back to keyword matching")
+                    return self._filter_by_keywords(search_results, query)
+                
+                # Apply the scores to the results
+                for eval_item in evaluations:
+                    try:
+                        result_id = eval_item.get("result_id")
+                        if result_id and 1 <= result_id <= len(search_results):
+                            search_results[result_id-1].relevance_score = eval_item.get("relevance_score", 0.0)
+                            search_results[result_id-1].metadata["justification"] = eval_item.get("justification", "")
+                    except Exception as e:
+                        logger.error(f"Error processing evaluation item: {e}")
+                
+                # Filter based on score threshold
+                filtered_results = [r for r in search_results if r.relevance_score > 0.5]
+                
+                # Sort by relevance score
+                filtered_results.sort(key=lambda x: x.relevance_score, reverse=True)
+                
+                logger.info(f"Filtered {len(search_results)} results to {len(filtered_results)} using LLM")
+                
+                # Return as dictionaries
+                return [result.model_dump() for result in filtered_results]
+                
+            except Exception as e:
+                logger.error(f"Error filtering with LLM: {e}")
+                # Fall back to keyword matching
+                return self._filter_by_keywords(search_results, query)
+        else:
+            # Fall back to keyword matching
+            return self._filter_by_keywords(search_results, query)
+    
+    def _filter_by_keywords(self, search_results: List[SearchResult], query: str) -> List[Dict]:
+        """
+        Filter search results using simple keyword matching.
+        
+        Args:
+            search_results: List of SearchResult objects.
+            query: The original search query.
+            
+        Returns:
+            A filtered list of search result dictionaries.
+        """
+        # Use simple keyword matching approach
         keywords = query.lower().split()
         
         filtered_results = []
@@ -364,7 +578,7 @@ class SearchAgent:
         # Sort by relevance score
         filtered_results.sort(key=lambda x: x.relevance_score, reverse=True)
         
-        logger.info(f"Filtered {len(search_results)} results to {len(filtered_results)}")
+        logger.info(f"Filtered {len(search_results)} results to {len(filtered_results)} using keyword matching")
         
         # Return as dictionaries
         return [result.model_dump() for result in filtered_results]

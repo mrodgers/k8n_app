@@ -13,6 +13,18 @@ data:
         user: postgres
         connect_timeout: 5
         retry_attempts: 3
+    
+    # LLM configuration
+    llm:
+      enabled: true
+      model: gemma3:1b
+      url: http://ollama-service:11434
+      timeout: 120
+    
+    # Brave Search API configuration
+    brave_search:
+      endpoint: https://api.search.brave.com/res/v1/web/search
+      max_results: 10
   
   # Application settings
   app.env: |
@@ -22,3 +34,7 @@ data:
     SERVER_PORT=8181
     API_TIMEOUT=30
     CORS_ORIGINS=*
+    OLLAMA_URL=http://ollama-service:11434
+    OLLAMA_MODEL=gemma3:1b
+    PLANNER_LLM_MODEL=gemma3:1b
+    SEARCH_LLM_MODEL=gemma3:1b

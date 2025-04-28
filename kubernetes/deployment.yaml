@@ -14,6 +14,10 @@ spec:
       labels:
         app: research-system
     spec:
+      initContainers:
+      - name: wait-for-ollama
+        image: busybox:1.28
+        command: ['sh', '-c', 'until wget -q -O - http://ollama-service:11434/api/version; do echo "Waiting for Ollama service..."; sleep 2; done;']
       containers:
       - name: research-system
         image: research-system:latest
@@ -22,11 +26,11 @@ spec:
         - containerPort: 8181
         resources:
           limits:
-            cpu: "500m"
-            memory: "512Mi"
+            cpu: "1000m"
+            memory: "1Gi"
           requests:
-            cpu: "100m"
-            memory: "256Mi"
+            cpu: "200m"
+            memory: "512Mi"
         env:
         - name: DB_USE_POSTGRES
           value: "true"
@@ -43,6 +47,14 @@ spec:
             secretKeyRef:
               name: research-system-db-credentials
               key: DB_POSTGRES_PASSWORD
+        - name: OLLAMA_URL
+          value: "http://ollama-service:11434"
+        - name: OLLAMA_MODEL
+          value: "gemma3:1b"
+        - name: PLANNER_LLM_MODEL
+          value: "gemma3:1b"
+        - name: SEARCH_LLM_MODEL
+          value: "gemma3:1b"
         - name: LOG_LEVEL
           valueFrom:
             configMapKeyRef:

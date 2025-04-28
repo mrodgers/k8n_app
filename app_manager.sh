@@ -62,12 +62,14 @@ show_help() {
     echo "  result <subcommand> Manage research results"
     echo "  plan <subcommand> Manage research plans"
     echo "  test             Run tests"
+    echo "  ollama <subcommand> Manage Ollama LLM service"
     echo "  help             Show this help message"
     echo ""
     echo "Examples:"
     echo "  ./app_manager.sh start"
     echo "  ./app_manager.sh search \"artificial intelligence\""
     echo "  ./app_manager.sh task create --title \"AI Research\" --description \"Research on AI trends\""
+    echo "  ./app_manager.sh ollama start"
     echo "  ./app_manager.sh test"
     echo ""
     echo "Setup Instructions:"
@@ -189,6 +191,129 @@ run_tests() {
     PYTHONPATH="$(pwd):${PYTHONPATH}" python -m pytest
 }
 
+# Function to manage Ollama
+manage_ollama() {
+    # Check if Docker is installed
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}Docker is required to run Ollama but not found.${NC}"
+        echo -e "Please install Docker and try again."
+        return 1
+    fi
+
+    OLLAMA_CONTAINER="research-ollama"
+    MODEL="${3:-gemma3:1b}"  # Default model is gemma3:1b
+    
+    case "$2" in
+        start)
+            echo -e "${BLUE}Starting Ollama service...${NC}"
+            
+            # Check if Ollama is already running
+            if docker ps | grep -q "$OLLAMA_CONTAINER"; then
+                echo -e "${YELLOW}Ollama is already running.${NC}"
+                docker ps | grep "$OLLAMA_CONTAINER"
+                return 0
+            fi
+            
+            # Start Ollama container
+            docker run -d \
+                --name $OLLAMA_CONTAINER \
+                -p 11434:11434 \
+                -v ollama-data:/root/.ollama \
+                ollama/ollama
+            
+            echo -e "${GREEN}Ollama started successfully.${NC}"
+            echo -e "Waiting for Ollama to initialize..."
+            sleep 3
+            
+            # Pull the specified model if provided
+            if [ ! -z "$MODEL" ]; then
+                echo -e "${BLUE}Pulling model: $MODEL${NC}"
+                curl -s -X POST "http://localhost:11434/api/pull" -d "{\"model\":\"$MODEL\"}"
+                echo -e "${GREEN}Model $MODEL is now available.${NC}"
+            fi
+            
+            echo -e "${GREEN}Ollama is ready at ${BLUE}http://localhost:11434${NC}"
+            ;;
+            
+        stop)
+            echo -e "${BLUE}Stopping Ollama service...${NC}"
+            if ! docker ps | grep -q "$OLLAMA_CONTAINER"; then
+                echo -e "${YELLOW}Ollama is not running.${NC}"
+                return 0
+            fi
+            
+            docker stop $OLLAMA_CONTAINER
+            docker rm $OLLAMA_CONTAINER
+            echo -e "${GREEN}Ollama stopped successfully.${NC}"
+            ;;
+            
+        status)
+            echo -e "${BLUE}Checking Ollama status...${NC}"
+            if docker ps | grep -q "$OLLAMA_CONTAINER"; then
+                echo -e "${GREEN}Ollama is running.${NC}"
+                docker ps | grep "$OLLAMA_CONTAINER"
+                
+                # Get version information
+                VERSION=$(curl -s http://localhost:11434/api/version)
+                echo -e "Ollama version: ${BLUE}$(echo $VERSION | grep -o '"version":"[^"]*' | cut -d'"' -f4)${NC}"
+                
+                # List models
+                echo -e "\n${BLUE}Available models:${NC}"
+                MODELS=$(curl -s http://localhost:11434/api/tags)
+                echo "$MODELS" | grep -o '"name":"[^"]*' | cut -d'"' -f4 | nl
+            else
+                echo -e "${RED}Ollama is not running.${NC}"
+            fi
+            ;;
+            
+        pull)
+            echo -e "${BLUE}Pulling Ollama model: $MODEL${NC}"
+            if ! docker ps | grep -q "$OLLAMA_CONTAINER"; then
+                echo -e "${RED}Ollama is not running. Start it first with: ${YELLOW}./app_manager.sh ollama start${NC}"
+                return 1
+            fi
+            
+            curl -s -X POST "http://localhost:11434/api/pull" -d "{\"model\":\"$MODEL\"}"
+            echo -e "${GREEN}Model $MODEL is now available.${NC}"
+            ;;
+            
+        logs)
+            echo -e "${BLUE}Viewing Ollama logs...${NC}"
+            if ! docker ps | grep -q "$OLLAMA_CONTAINER"; then
+                echo -e "${RED}Ollama is not running.${NC}"
+                return 1
+            fi
+            
+            docker logs $OLLAMA_CONTAINER
+            ;;
+            
+        test)
+            echo -e "${BLUE}Testing Ollama with LLM functionality...${NC}"
+            if [ ! -x "./scripts/run_llm_tests.sh" ]; then
+                echo -e "${RED}Test script not found or not executable.${NC}"
+                echo -e "Please check if ./scripts/run_llm_tests.sh exists and is executable."
+                return 1
+            fi
+            
+            # Run tests with mock by default
+            TEST_ARGS="${@:3}"  # Get all arguments after "ollama test"
+            if [ -z "$TEST_ARGS" ]; then
+                # No args provided, just run with mock tests
+                ./scripts/run_llm_tests.sh
+            else
+                # Pass all additional args to the test script
+                ./scripts/run_llm_tests.sh $TEST_ARGS
+            fi
+            ;;
+            
+        *)
+            echo -e "${RED}Unknown Ollama command: $2${NC}"
+            echo -e "Available Ollama commands: start, stop, status, pull, logs, test"
+            return 1
+            ;;
+    esac
+}
+
 # Main logic
 case "$1" in
     start)
@@ -208,6 +333,9 @@ case "$1" in
         ;;
     test)
         run_tests
+        ;;
+    ollama)
+        manage_ollama "$@"
         ;;
     help|--help|-h)
         show_help

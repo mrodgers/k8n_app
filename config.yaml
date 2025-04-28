@@ -4,3 +4,16 @@ app:
 logging:
   level: INFO
 environment: production
+
+# LLM configuration
+llm:
+  enabled: true
+  model: gemma3:1b  # Default model to use
+  url: null  # Will default to environment variable OLLAMA_URL or "http://localhost:11434"
+  timeout: 120
+
+# Brave Search API configuration
+brave_search:
+  api_key: null  # Will default to environment variable BRAVE_SEARCH_API_KEY
+  max_results: 10
+  endpoint: https://api.search.brave.com/res/v1/web/search

@@ -1,17 +1,21 @@
 """
 Planner Agent for the Research System.
 
-This module implements a specialized FastMCP agent for research planning.
+This module implements a specialized FastMCP agent for research planning,
+leveraging LLMs through the Ollama integration.
 """
 
 import logging
 import time
 import uuid
+import os
+import asyncio
 from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 
 from src.research_system.core.server import FastMCPServer, Context
 from src.research_system.models.db import ResearchTask, ResearchResult, default_db
+from src.research_system.llm import create_ollama_client
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +41,7 @@ class PlannerAgent:
     """
     
     def __init__(self, name: str = "planner", server: Optional[FastMCPServer] = None,
-                db=default_db):
+                db=default_db, config: Dict = None):
         """
         Initialize the planner agent.
         
@@ -45,11 +49,32 @@ class PlannerAgent:
             name: The name of the agent.
             server: Optional FastMCP server to register tools with.
             db: Database instance for storing tasks and results.
+            config: Optional configuration dictionary.
         """
         self.name = name
         self.server = server
         self.db = db
+        self.config = config or {}
         self.plans = {}  # In-memory storage for plans
+        
+        # LLM configuration
+        self.use_llm = self.config.get("use_llm", True)
+        self.ollama_model = self.config.get("ollama_model") or os.environ.get("PLANNER_LLM_MODEL", "gemma3:1b")
+        
+        # Initialize LLM client if enabled
+        self.llm_client = None
+        if self.use_llm:
+            try:
+                self.llm_client = create_ollama_client(
+                    async_client=False,
+                    base_url=self.config.get("ollama_url") or os.environ.get("OLLAMA_URL"),
+                    timeout=self.config.get("ollama_timeout", 120)
+                )
+                logger.info(f"LLM client initialized for {name} agent using model: {self.ollama_model}")
+            except Exception as e:
+                logger.warning(f"Failed to initialize LLM client for {name} agent: {e}")
+                logger.warning("The agent will fall back to template-based planning")
+                self.use_llm = False
         
         if server:
             self.register_tools()
@@ -221,9 +246,9 @@ class PlannerAgent:
         """
         Generate a research plan for a task.
         
-        This method would typically involve calling an LLM to generate a structured
-        research plan based on the task description. For simplicity, this implementation
-        creates a basic plan with predefined steps.
+        This method uses an LLM to generate a structured research plan based on 
+        the task description, or falls back to a template-based approach if LLM 
+        is unavailable.
         
         Args:
             task_id: The ID of the task to generate a plan for.
@@ -243,9 +268,129 @@ class PlannerAgent:
         if context:
             context.update_progress(0.1, "Generating research plan")
         
-        # In a real implementation, this would call an LLM to generate a plan
-        # For now, we'll create a simple template plan
-        steps = [
+        # Use LLM to generate the plan if available
+        steps = []
+        if self.use_llm and self.llm_client:
+            try:
+                if context:
+                    context.update_progress(0.2, "Querying LLM for research plan")
+                
+                # Create a system prompt for the LLM
+                system_prompt = """
+                You are a research planner assistant. Your job is to create a detailed research plan
+                for the given task. The plan should include 5-7 steps, with each step containing:
+                - A sequential ID number
+                - A type (search, analysis, synthesis, review, interview, experiment, etc.)
+                - A descriptive name
+                - A detailed description of what to do
+                - The status (always set to "pending")
+                - Dependencies on previous steps (if applicable)
+                
+                Create a comprehensive, logical sequence of steps that would result in a thorough
+                research outcome for the given task.
+                """
+                
+                # Create a user prompt with the task details
+                user_prompt = f"""
+                Create a research plan for the following task:
+                
+                Title: {task.title}
+                Description: {task.description}
+                Tags: {', '.join(task.tags) if task.tags else 'None'}
+                
+                Return the plan as a JSON array of steps, with each step having the properties:
+                id, type, name, description, status, and optionally depends_on.
+                """
+                
+                # Generate completion with Ollama
+                response = self.llm_client.generate_chat_completion(
+                    model=self.ollama_model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    stream=False
+                )
+                
+                # Extract the generated content
+                generated_content = response.get("message", {}).get("content", "")
+                
+                if context:
+                    context.update_progress(0.5, "Processing LLM response")
+                
+                # Parse the JSON response - handle different formats the LLM might return
+                import json
+                import re
+                
+                # Try to extract JSON from the response
+                json_match = re.search(r'\[\s*{.*}\s*\]', generated_content, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                    steps = json.loads(json_str)
+                else:
+                    # Try to extract each step individually if JSON parsing fails
+                    steps = []
+                    step_matches = re.finditer(r'{[\s\S]*?}', generated_content)
+                    for i, match in enumerate(step_matches):
+                        try:
+                            step = json.loads(match.group(0))
+                            if isinstance(step, dict) and "id" in step and "type" in step:
+                                steps.append(step)
+                        except json.JSONDecodeError:
+                            continue
+                
+                # If we still don't have valid steps, fall back to template
+                if not steps:
+                    logger.warning("Failed to parse LLM response, falling back to template plan")
+                    steps = self._create_template_plan(task)
+                else:
+                    # Ensure all required fields are present and format is consistent
+                    for i, step in enumerate(steps):
+                        # Ensure ID is an integer
+                        if "id" not in step or not isinstance(step["id"], int):
+                            step["id"] = i + 1
+                        # Ensure status is "pending"
+                        step["status"] = "pending"
+                        # Ensure depends_on is a list if present
+                        if "depends_on" in step and not isinstance(step["depends_on"], list):
+                            step["depends_on"] = [step["depends_on"]] if step["depends_on"] else []
+                
+                logger.info(f"Generated {len(steps)} research plan steps using LLM")
+                
+            except Exception as e:
+                logger.error(f"Error generating plan with LLM: {e}")
+                if context:
+                    context.log_error(f"Error generating plan with LLM: {e}")
+                steps = self._create_template_plan(task)
+        else:
+            # Fall back to template-based planning
+            steps = self._create_template_plan(task)
+        
+        # Update context if provided
+        if context:
+            context.update_progress(0.9, "Research plan generated")
+        
+        # Create the plan
+        plan = self.create_research_plan(task_id, steps)
+        
+        # Update context if provided
+        if context:
+            context.update_progress(1.0, "Research plan creation completed")
+        
+        logger.info(f"Generated research plan for task: {task.id}")
+        return plan
+    
+    def _create_template_plan(self, task: ResearchTask) -> List[Dict[str, Any]]:
+        """
+        Create a template-based research plan.
+        
+        Args:
+            task: The research task.
+            
+        Returns:
+            A list of plan steps.
+        """
+        return [
             {
                 "id": 1,
                 "type": "search",
@@ -286,20 +431,6 @@ class PlannerAgent:
                 "depends_on": [4]
             }
         ]
-        
-        # Update context if provided
-        if context:
-            context.update_progress(0.9, "Research plan generated")
-        
-        # Create the plan
-        plan = self.create_research_plan(task_id, steps)
-        
-        # Update context if provided
-        if context:
-            context.update_progress(1.0, "Research plan creation completed")
-        
-        logger.info(f"Generated research plan for task: {task.id}")
-        return plan
 
 # Create a default planner agent instance
 default_planner = PlannerAgent()

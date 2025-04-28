@@ -21,6 +21,7 @@ from src.research_system.agents.planner import PlannerAgent, default_planner
 from src.research_system.agents.search import SearchAgent, default_search
 from src.research_system.models.db import Database, default_db
 from src.research_system.models.db_config import load_config as load_db_config
+from src.research_system.llm import create_ollama_client
 
 # Configure logging
 logging.basicConfig(
@@ -66,8 +67,46 @@ app.add_middleware(
 # Set up core components
 main_server = FastMCPServer("Research System API", config)
 coordinator = default_coordinator
-planner = default_planner
-search = default_search
+
+# Configure LLM settings
+llm_config = config.get("llm", {})
+use_llm = llm_config.get("enabled", True)
+ollama_model = llm_config.get("model") or os.environ.get("OLLAMA_MODEL", "gemma3:1b")
+ollama_url = llm_config.get("url") or os.environ.get("OLLAMA_URL")
+
+# Initialize LLM client
+llm_client = None
+if use_llm:
+    try:
+        # Try to initialize LLM client
+        llm_client = create_ollama_client(
+            async_client=False,
+            base_url=ollama_url,
+            timeout=llm_config.get("timeout", 120)
+        )
+        logger.info(f"Initialized LLM client using model: {ollama_model}")
+    except Exception as e:
+        logger.warning(f"Failed to initialize LLM client: {e}")
+        logger.warning("Research System will operate without LLM capabilities")
+        use_llm = False
+
+# Create agent configurations
+planner_config = {
+    "use_llm": use_llm,
+    "ollama_model": ollama_model,
+    "ollama_url": ollama_url
+}
+
+search_config = {
+    "use_llm": use_llm,
+    "ollama_model": ollama_model,
+    "ollama_url": ollama_url,
+    "brave_search": config.get("brave_search", {})
+}
+
+# Initialize agents with LLM support
+planner = PlannerAgent(config=planner_config)
+search = SearchAgent(config=search_config)
 
 # Register agents with the coordinator
 coordinator.register_agent({
@@ -116,11 +155,12 @@ async def readiness_probe():
     Readiness probe endpoint for Kubernetes.
     
     This endpoint verifies that the application is ready to handle requests
-    by checking connectivity to dependent services like the database.
+    by checking connectivity to dependent services like the database and LLM.
     """
     services_status = {
         "api": True,
         "database": False,
+        "llm": False if use_llm else None  # None means not required
     }
     
     # Check database connectivity
@@ -132,8 +172,26 @@ async def readiness_probe():
         logger.error(f"Database readiness check failed: {str(e)}")
         services_status["database"] = False
     
+    # Check LLM connectivity if enabled
+    if use_llm and llm_client:
+        try:
+            # Test LLM client with a version check (lightweight operation)
+            version_info = llm_client.get_version()
+            if version_info and "version" in version_info:
+                services_status["llm"] = True
+                logger.debug(f"LLM readiness check successful. Ollama version: {version_info['version']}")
+            else:
+                logger.error("LLM readiness check failed: Invalid version response")
+                services_status["llm"] = False
+        except Exception as e:
+            logger.error(f"LLM readiness check failed: {str(e)}")
+            services_status["llm"] = False
+    
+    # Filter out None values (services not required)
+    required_services = {k: v for k, v in services_status.items() if v is not None}
+    
     # Determine overall status
-    all_ready = all(services_status.values())
+    all_ready = all(required_services.values())
     
     status_code = 200 if all_ready else 503
     response = {
@@ -161,6 +219,10 @@ async def root():
         "message": "Research System API",
         "version": "1.0.0",
         "environment": config.get("environment", "development"),
+        "llm": {
+            "enabled": use_llm,
+            "model": ollama_model if use_llm else None
+        },
         "components": {
             "agents": coordinator.list_agents(),
             "services": ["planner", "search", "coordinator"]
