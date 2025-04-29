@@ -21,6 +21,8 @@ from research_system.core.server import FastMCPServer, Context
 from research_system.models.db import ResearchTask, ResearchResult, default_db
 from research_system.llm import create_ollama_client
 from research_system.config import load_config
+from research_system.interfaces import AgentInterface
+from research_system.exceptions import ResourceNotFoundError, TaskNotFoundError, LLMServiceError
 
 # Configure logging
 logging.basicConfig(
@@ -48,12 +50,13 @@ class SearchResult(BaseModel):
     relevance_score: Optional[float] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-class SearchAgent:
+class SearchAgent(AgentInterface):
     """
     Search agent for the research system.
     
     This agent is responsible for executing search queries and extracting
-    relevant content from search results using LLMs.
+    relevant content from search results using LLMs. It implements the
+    AgentInterface to provide standardized capability discovery and execution.
     """
     
     def __init__(self, name: str = "search", server: Optional[FastMCPServer] = None,
@@ -113,6 +116,16 @@ class SearchAgent:
         if server:
             self.register_tools()
         
+        # Define agent capabilities
+        self._capabilities = [
+            "execute_search",
+            "extract_content",
+            "filter_results",
+            "rank_results_by_relevance",
+            "extract_citations",
+            "store_search_results"
+        ]
+        
         logger.info(f"Search agent '{name}' initialized")
     
     def register_tools(self):
@@ -148,9 +161,15 @@ class SearchAgent:
             
         Returns:
             A SearchQuery object.
+            
+        Raises:
+            ResourceNotFoundError: If the search query is empty.
         """
         if not query.strip():
-            raise ValueError("Search query cannot be empty")
+            raise ResourceNotFoundError(
+                message="Search query cannot be empty",
+                details={"task_id": task_id}
+            )
         
         search_query = SearchQuery(
             task_id=task_id,
@@ -179,7 +198,8 @@ class SearchAgent:
             A list of dictionaries representing search results.
             
         Raises:
-            Exception: If the API request fails.
+            ResourceNotFoundError: If the search query is empty.
+            LLMServiceError: If the API request fails or results cannot be processed.
         """
         if context:
             context.update_progress(0.1, "Creating search query")
@@ -227,13 +247,20 @@ class SearchAgent:
                     continue
                 
                 # Handle other errors
-                logger.error(f"API error: {response.status_code} - {response.text}")
-                raise Exception(f"API error: {response.status_code} - {response.text}")
+                error_msg = f"API error: {response.status_code} - {response.text}"
+                logger.error(error_msg)
+                raise LLMServiceError(
+                    message=error_msg,
+                    details={"status_code": response.status_code, "response": response.text}
+                )
             
             except requests.RequestException as e:
                 logger.error(f"Request failed: {e}")
                 if attempt == max_retries - 1:
-                    raise Exception(f"Failed to execute search after {max_retries} attempts: {e}")
+                    raise LLMServiceError(
+                        message=f"Failed to execute search after {max_retries} attempts",
+                        details={"error": str(e)}
+                    )
                 
                 time.sleep(retry_delay)
                 retry_delay *= 2
@@ -274,10 +301,14 @@ class SearchAgent:
             return [result.model_dump() for result in results]
         
         except Exception as e:
-            logger.error(f"Error processing search results: {e}")
+            error_msg = f"Error processing search results: {e}"
+            logger.error(error_msg)
             if context:
-                context.log_error(f"Error processing search results: {e}")
-            raise Exception(f"Error processing search results: {e}")
+                context.log_error(error_msg)
+            raise LLMServiceError(
+                message=error_msg,
+                details={"error": str(e)}
+            )
     
     def extract_content_from_url(self, url: str, context: Context = None) -> str:
         """
@@ -294,7 +325,7 @@ class SearchAgent:
             The extracted content as a string.
             
         Raises:
-            Exception: If the request fails or content extraction fails.
+            LLMServiceError: If the request fails or content extraction fails.
         """
         if context:
             context.update_progress(0.1, f"Fetching content from URL: {url}")
@@ -308,7 +339,10 @@ class SearchAgent:
                 logger.error(error_msg)
                 if context:
                     context.log_error(error_msg)
-                raise Exception(error_msg)
+                raise LLMServiceError(
+                    message=error_msg,
+                    details={"url": url, "status_code": response.status_code}
+                )
             
             # Get the content
             html_content = response.text
@@ -409,12 +443,18 @@ class SearchAgent:
                     context.update_progress(1.0, "Basic content extraction completed")
                 return cleaned_text
             
+        except LLMServiceError:
+            # Re-raise LLM service errors
+            raise
         except Exception as e:
             error_msg = f"Error extracting content from {url}: {e}"
             logger.error(error_msg)
             if context:
                 context.log_error(error_msg)
-            raise Exception(error_msg)
+            raise LLMServiceError(
+                message=error_msg,
+                details={"url": url, "error": str(e)}
+            )
     
     def filter_relevant_results(self, results: List[Dict], query: str) -> List[Dict]:
         """
@@ -662,7 +702,18 @@ class SearchAgent:
         Args:
             task_id: The ID of the task associated with the results.
             results: List of search results.
+            
+        Raises:
+            TaskNotFoundError: If the task does not exist.
         """
+        # Verify that the task exists
+        task = self.db.get_task(task_id)
+        if task is None:
+            raise TaskNotFoundError(
+                message=f"Task not found: {task_id}",
+                details={"task_id": task_id}
+            )
+            
         # Convert results to dictionaries if they're SearchResult objects
         result_dicts = []
         for result in results:
@@ -689,6 +740,71 @@ class SearchAgent:
         # Store in the database
         self.db.create_result(research_result)
         logger.info(f"Stored {len(result_dicts)} search results as result: {result_id}")
+        
+    def get_capabilities(self) -> List[str]:
+        """
+        Get a list of capabilities provided by this agent.
+        
+        Returns:
+            List of capability names as strings
+        """
+        return self._capabilities
+    
+    def execute_capability(self, name: str, **kwargs) -> Any:
+        """
+        Execute a specific capability by name.
+        
+        Args:
+            name: The name of the capability to execute
+            **kwargs: Parameters for the capability
+            
+        Returns:
+            Result of the capability execution
+            
+        Raises:
+            ResourceNotFoundError: If the agent doesn't provide the requested capability
+            TaskNotFoundError: If a task-related operation fails because the task doesn't exist
+            LLMServiceError: If there's an error with the LLM service
+        """
+        if name not in self._capabilities:
+            logger.error(f"Requested capability '{name}' not supported by {self.name} agent")
+            raise ResourceNotFoundError(
+                message=f"Capability not supported: {name}",
+                details={"agent": self.name, "available_capabilities": self._capabilities}
+            )
+            
+        # Map capability names to their corresponding methods
+        capability_mapping = {
+            "execute_search": self.execute_search,
+            "extract_content": self.extract_content_from_url,
+            "filter_results": self.filter_relevant_results,
+            "rank_results_by_relevance": self.rank_results_by_relevance,
+            "extract_citations": self.extract_citations,
+            "store_search_results": self.store_search_results
+        }
+        
+        # Execute the capability with the provided parameters
+        try:
+            return capability_mapping[name](**kwargs)
+        except TypeError as e:
+            # Provide a more helpful error message if the parameters don't match
+            logger.error(f"Error executing capability '{name}': {e}")
+            raise ResourceNotFoundError(
+                message=f"Invalid parameters for capability '{name}'",
+                details={"error": str(e), "capability": name}
+            )
+        except TaskNotFoundError as e:
+            # Re-raise task not found exceptions
+            logger.error(f"Task not found while executing capability '{name}': {e}")
+            raise
+        except LLMServiceError as e:
+            # Re-raise LLM service errors
+            logger.error(f"LLM service error while executing capability '{name}': {e}")
+            raise
+        except Exception as e:
+            # Catch any other exceptions and provide context
+            logger.error(f"Error executing capability '{name}': {e}")
+            raise
 
 # Create a default search agent instance
 default_search = SearchAgent()

@@ -13,9 +13,11 @@ import asyncio
 from typing import Dict, List, Optional, Any, Union
 from pydantic import BaseModel, Field
 
-from src.research_system.core.server import FastMCPServer, Context
-from src.research_system.models.db import ResearchTask, ResearchResult, default_db
-from src.research_system.llm import create_ollama_client
+from research_system.core.server import FastMCPServer, Context
+from research_system.models.db import ResearchTask, ResearchResult, default_db
+from research_system.llm import create_ollama_client
+from research_system.interfaces import AgentInterface
+from research_system.exceptions import ResourceNotFoundError, TaskNotFoundError, LLMServiceError
 
 # Configure logging
 logging.basicConfig(
@@ -33,11 +35,13 @@ class ResearchPlan(BaseModel):
     updated_at: float = Field(default_factory=time.time)
     status: str = "draft"  # draft, approved, in_progress, completed
 
-class PlannerAgent:
+class PlannerAgent(AgentInterface):
     """
     Planner agent for the research system.
     
     This agent is responsible for creating and managing research plans.
+    It implements the AgentInterface to provide standardized capability
+    discovery and execution.
     """
     
     def __init__(self, name: str = "planner", server: Optional[FastMCPServer] = None,
@@ -78,6 +82,16 @@ class PlannerAgent:
         
         if server:
             self.register_tools()
+        
+        # Define agent capabilities
+        self._capabilities = [
+            "create_research_task",
+            "create_research_plan",
+            "get_research_plan",
+            "update_research_plan",
+            "list_research_tasks",
+            "generate_plan_for_task"
+        ]
         
         logger.info(f"Planner agent '{name}' initialized")
     
@@ -153,12 +167,15 @@ class PlannerAgent:
             A dictionary representation of the created plan.
             
         Raises:
-            ValueError: If the task does not exist.
+            TaskNotFoundError: If the task does not exist.
         """
         # Check if the task exists
         task = self.db.get_task(task_id)
         if task is None:
-            raise ValueError(f"Task not found: {task_id}")
+            raise TaskNotFoundError(
+                message=f"Task not found: {task_id}",
+                details={"task_id": task_id}
+            )
         
         plan = ResearchPlan(
             task_id=task_id,
@@ -187,10 +204,13 @@ class PlannerAgent:
             A dictionary representation of the plan.
             
         Raises:
-            ValueError: If the plan does not exist.
+            ResourceNotFoundError: If the plan does not exist.
         """
         if plan_id not in self.plans:
-            raise ValueError(f"Plan not found: {plan_id}")
+            raise ResourceNotFoundError(
+                message=f"Plan not found: {plan_id}",
+                details={"plan_id": plan_id}
+            )
         
         return self.plans[plan_id].model_dump()
     
@@ -208,10 +228,13 @@ class PlannerAgent:
             A dictionary representation of the updated plan.
             
         Raises:
-            ValueError: If the plan does not exist.
+            ResourceNotFoundError: If the plan does not exist.
         """
         if plan_id not in self.plans:
-            raise ValueError(f"Plan not found: {plan_id}")
+            raise ResourceNotFoundError(
+                message=f"Plan not found: {plan_id}",
+                details={"plan_id": plan_id}
+            )
         
         plan = self.plans[plan_id]
         
@@ -258,11 +281,15 @@ class PlannerAgent:
             A dictionary representation of the generated plan.
             
         Raises:
-            ValueError: If the task does not exist.
+            TaskNotFoundError: If the task does not exist.
+            LLMServiceError: If there's an error with the LLM service that prevents fallback.
         """
         task = self.db.get_task(task_id)
         if task is None:
-            raise ValueError(f"Task not found: {task_id}")
+            raise TaskNotFoundError(
+                message=f"Task not found: {task_id}",
+                details={"task_id": task_id}
+            )
         
         # Update context if provided
         if context:
@@ -358,9 +385,12 @@ class PlannerAgent:
                 logger.info(f"Generated {len(steps)} research plan steps using LLM")
                 
             except Exception as e:
-                logger.error(f"Error generating plan with LLM: {e}")
+                error_msg = f"Error generating plan with LLM: {e}"
+                logger.error(error_msg)
                 if context:
-                    context.log_error(f"Error generating plan with LLM: {e}")
+                    context.log_error(error_msg)
+                # Log the error but don't throw an exception since we can fall back to template
+                logger.warning("Falling back to template-based plan generation")
                 steps = self._create_template_plan(task)
         else:
             # Fall back to template-based planning
@@ -379,6 +409,71 @@ class PlannerAgent:
         
         logger.info(f"Generated research plan for task: {task.id}")
         return plan
+    
+    def get_capabilities(self) -> List[str]:
+        """
+        Get a list of capabilities provided by this agent.
+        
+        Returns:
+            List of capability names as strings
+        """
+        return self._capabilities
+    
+    def execute_capability(self, name: str, **kwargs) -> Any:
+        """
+        Execute a specific capability by name.
+        
+        Args:
+            name: The name of the capability to execute
+            **kwargs: Parameters for the capability
+            
+        Returns:
+            Result of the capability execution
+            
+        Raises:
+            ResourceNotFoundError: If the agent doesn't provide the requested capability
+            TaskNotFoundError: If a task-related operation fails because the task doesn't exist
+            LLMServiceError: If there's an error with the LLM service
+        """
+        if name not in self._capabilities:
+            logger.error(f"Requested capability '{name}' not supported by {self.name} agent")
+            raise ResourceNotFoundError(
+                message=f"Capability not supported: {name}",
+                details={"agent": self.name, "available_capabilities": self._capabilities}
+            )
+            
+        # Map capability names to their corresponding methods
+        capability_mapping = {
+            "create_research_task": self.create_research_task,
+            "create_research_plan": self.create_research_plan,
+            "get_research_plan": self.get_research_plan,
+            "update_research_plan": self.update_research_plan,
+            "list_research_tasks": self.list_research_tasks,
+            "generate_plan_for_task": self.generate_plan_for_task
+        }
+        
+        # Execute the capability with the provided parameters
+        try:
+            return capability_mapping[name](**kwargs)
+        except TypeError as e:
+            # Provide a more helpful error message if the parameters don't match
+            logger.error(f"Error executing capability '{name}': {e}")
+            raise ResourceNotFoundError(
+                message=f"Invalid parameters for capability '{name}'",
+                details={"error": str(e), "capability": name}
+            )
+        except TaskNotFoundError as e:
+            # Re-raise task not found exceptions
+            logger.error(f"Task not found while executing capability '{name}': {e}")
+            raise
+        except LLMServiceError as e:
+            # Re-raise LLM service errors
+            logger.error(f"LLM service error while executing capability '{name}': {e}")
+            raise
+        except Exception as e:
+            # Catch any other exceptions and provide context
+            logger.error(f"Error executing capability '{name}': {e}")
+            raise
     
     def _create_template_plan(self, task: ResearchTask) -> List[Dict[str, Any]]:
         """
