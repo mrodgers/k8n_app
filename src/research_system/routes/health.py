@@ -27,6 +27,9 @@ async def health_check(request: Request):
     Returns:
         dict: Status information including system health and dependency checks
     """
+    # Import here to ensure we get the latest version
+    from research_system.version import get_version_info, get_version_string
+    
     # For simplicity and reliability, return a fixed healthy response
     # This makes the endpoint suitable for both liveness and readiness probes
     version_info = get_version_info()
@@ -53,6 +56,9 @@ async def kubernetes_liveness_probe(request: Request):
     Returns:
         dict: Basic health status
     """
+    # Import here to ensure we get the latest version
+    from research_system.version import get_version_info, get_version_string
+    
     # Include full version info including build number
     version_info = get_version_info()
     return {
@@ -74,6 +80,9 @@ async def kubernetes_readiness_probe(request: Request):
     Returns:
         dict: Detailed readiness status including component checks
     """
+    # Import here to ensure we get the latest version
+    from research_system.version import get_version_info, get_version_string
+    
     # Check database connection
     db_status = "ready"
     try:
@@ -125,6 +134,9 @@ async def root(request: Request):
     Returns:
         dict: System information including version, components, and configuration
     """
+    # Import here to ensure we get the latest version
+    from research_system.version import get_version_info, get_version_string
+    
     # Get configuration
     config = request.app.state.config
     
