@@ -31,6 +31,19 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.labels.app.kubernetes.io/version
+        - name: CONFIG_PATH
+          value: "/app/config/config.yaml"
+        - name: RESEARCH_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: research-system-db-credentials
+              key: DB_POSTGRES_PASSWORD
+        # Optional: override specific environment variables
+        - name: RESEARCH_ENV_MODE
+          value: "production"
+        envFrom:
+        - configMapRef:
+            name: research-system-env
         ports:
         - containerPort: 8181
         resources:
@@ -40,36 +53,6 @@ spec:
           requests:
             cpu: "200m"
             memory: "512Mi"
-        env:
-        - name: DB_USE_POSTGRES
-          value: "true"
-        - name: DB_POSTGRES_HOST
-          value: "postgres"
-        - name: DB_POSTGRES_PORT
-          value: "5432"
-        - name: DB_POSTGRES_DBNAME
-          value: "research"
-        - name: DB_POSTGRES_USER
-          value: "postgres"
-        - name: DB_POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: research-system-db-credentials
-              key: DB_POSTGRES_PASSWORD
-        - name: OLLAMA_URL
-          value: "http://ollama-service:11434"
-        - name: OLLAMA_MODEL
-          value: "gemma3:1b"
-        - name: PLANNER_LLM_MODEL
-          value: "gemma3:1b"
-        - name: SEARCH_LLM_MODEL
-          value: "gemma3:1b"
-        - name: LOG_LEVEL
-          valueFrom:
-            configMapKeyRef:
-              name: research-system-config
-              key: app.env
-              optional: true
         livenessProbe:
           httpGet:
             path: /health

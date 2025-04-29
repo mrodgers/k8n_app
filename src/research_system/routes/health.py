@@ -8,6 +8,8 @@ including basic liveness checks and detailed readiness information.
 import time
 from fastapi import APIRouter, Request
 
+from research_system.version import get_version_info, get_version_string
+
 router = APIRouter(tags=["Health"])
 
 @router.get("/health")
@@ -27,12 +29,15 @@ async def health_check(request: Request):
     """
     # For simplicity and reliability, return a fixed healthy response
     # This makes the endpoint suitable for both liveness and readiness probes
+    version_info = get_version_info()
     response = {
         "status": "healthy",
         "timestamp": time.time(),
         "service": "research-system",
-        "version": "1.0.0",
-        "uptime": time.time() - request.app.state.start_time
+        "version": get_version_string(),
+        "build_number": version_info["build_number"],
+        "uptime": time.time() - request.app.state.start_time,
+        "build_info": version_info
     }
     
     return response
@@ -48,11 +53,14 @@ async def kubernetes_liveness_probe(request: Request):
     Returns:
         dict: Basic health status
     """
+    # Include full version info including build number
+    version_info = get_version_info()
     return {
         "status": "healthy",
         "timestamp": time.time(),
         "service": "research-system",
-        "version": "1.0.0"
+        "version": get_version_string(),
+        "build_number": version_info["build_number"]
     }
 
 @router.get("/readyz")
@@ -93,9 +101,13 @@ async def kubernetes_readiness_probe(request: Request):
     # Overall status is ready only if all required components are ready
     overall_status = "ready" if db_status == "ready" else "not_ready"
     
+    # Include version info with build number
+    version_info = get_version_info()
     return {
         "status": overall_status,
         "timestamp": time.time(),
+        "version": get_version_string(),
+        "build_number": version_info["build_number"],
         "components": {
             "database": db_status,
             "llm": llm_status
@@ -145,10 +157,14 @@ async def root(request: Request):
             # Ignore errors when trying to get LLM info
             pass
     
-    # Return system information
+    # Return system information with version and build number
+    version_info = get_version_info()
     return {
         "message": "Research System API",
-        "version": "1.0.0",
+        "version": get_version_string(),
+        "build_number": version_info["build_number"],
+        "build_date": version_info["build_date"],
+        "git_revision": version_info["git_revision"],
         "environment": config.get("environment", "development"),
         "llm": llm_info,
         "components": {

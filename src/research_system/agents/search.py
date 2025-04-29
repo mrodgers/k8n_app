@@ -17,9 +17,10 @@ from pydantic import BaseModel, Field
 import os
 from urllib.parse import urlencode
 
-from src.research_system.core.server import FastMCPServer, Context
-from src.research_system.models.db import ResearchTask, ResearchResult, default_db
-from src.research_system.llm import create_ollama_client
+from research_system.core.server import FastMCPServer, Context
+from research_system.models.db import ResearchTask, ResearchResult, default_db
+from research_system.llm import create_ollama_client
+from research_system.config import load_config
 
 # Configure logging
 logging.basicConfig(
@@ -69,20 +70,26 @@ class SearchAgent:
         self.name = name
         self.server = server
         self.db = db
-        self.config = config or {}
         
-        # Configure Brave Search API
-        self.api_key = self.config.get("brave_search", {}).get("api_key") or os.getenv("BRAVE_SEARCH_API_KEY")
-        self.endpoint = self.config.get("brave_search", {}).get("endpoint") or "https://api.search.brave.com/res/v1/web/search"
-        self.max_results = self.config.get("brave_search", {}).get("max_results") or 10
+        # Load configuration if not provided
+        if config is None:
+            config = load_config()
+        self.config = config
+        
+        # Configure Brave Search API from centralized config
+        brave_config = self.config.get("brave_search", {})
+        self.api_key = brave_config.get("api_key")
+        self.endpoint = brave_config.get("endpoint", "https://api.search.brave.com/res/v1/web/search")
+        self.max_results = brave_config.get("max_results", 10)
         
         # Ensure API key is available
         if not self.api_key:
             logger.warning(f"Brave Search API key not provided for {name} agent")
         
-        # LLM configuration
-        self.use_llm = self.config.get("use_llm", True)
-        self.ollama_model = self.config.get("ollama_model") or os.environ.get("SEARCH_LLM_MODEL", "gemma3:1b")
+        # LLM configuration from centralized config
+        llm_config = self.config.get("llm", {})
+        self.use_llm = llm_config.get("enabled", True)
+        self.ollama_model = llm_config.get("model", "gemma3:1b")
         
         # Initialize LLM client if enabled
         self.llm_client = None
@@ -90,8 +97,8 @@ class SearchAgent:
             try:
                 self.llm_client = create_ollama_client(
                     async_client=False,
-                    base_url=self.config.get("ollama_url") or os.environ.get("OLLAMA_URL"),
-                    timeout=self.config.get("ollama_timeout", 120)
+                    base_url=llm_config.get("url"),
+                    timeout=llm_config.get("timeout", 120)
                 )
                 logger.info(f"LLM client initialized for {name} agent using model: {self.ollama_model}")
             except Exception as e:

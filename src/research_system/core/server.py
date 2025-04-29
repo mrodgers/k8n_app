@@ -23,22 +23,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load configuration
-def load_config():
-    """Load configuration from config.yaml file."""
-    try:
-        config_path = os.getenv("CONFIG_PATH", "config.yaml")
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
-    except Exception as e:
-        logger.error(f"Failed to load configuration: {e}")
-        # Return default configuration
-        return {
-            "app": {"port": 8080, "max_workers": 4},
-            "logging": {"level": "INFO"},
-            "environment": "development"
-        }
+# Import centralized configuration
+from research_system.config import load_config
 
+# Load configuration
 config = load_config()
 
 # FastMCP Server class

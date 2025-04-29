@@ -20,18 +20,21 @@ from research_system.config import load_config
 # Logger
 logger = logging.getLogger(__name__)
 
-def create_app(config_path: Optional[str] = None) -> FastAPI:
+def create_app(config_path: Optional[str] = None, config: Optional[Dict[str, Any]] = None) -> FastAPI:
     """
     Create and configure the FastAPI application.
     
     Args:
         config_path: Path to configuration file (optional)
+        config: Pre-loaded configuration dictionary (optional)
+            If provided, config_path is ignored.
     
     Returns:
         FastAPI: Configured FastAPI application
     """
-    # Load configuration
-    config = load_config(config_path)
+    # Load configuration if not provided
+    if config is None:
+        config = load_config(config_path)
     
     # Initialize FastAPI app
     app = FastAPI(
@@ -122,12 +125,14 @@ def register_routes(app: FastAPI) -> None:
     from research_system.routes.tasks import router as tasks_router
     from research_system.routes.results import router as results_router
     from research_system.routes.llm import router as llm_router
+    from research_system.routes.research import router as research_router
     
     # Include routers
     app.include_router(health_router)
     app.include_router(tasks_router)
     app.include_router(results_router)
     app.include_router(llm_router)
+    app.include_router(research_router)
     
     # Import and setup additional modules
     from research_system.core.research import setup_research
@@ -146,18 +151,27 @@ def init_components(app: FastAPI, config: Dict[str, Any]) -> None:
         config: Application configuration
     """
     # Import main components
-    from research_system.core.coordinator import default_coordinator
-    from research_system.agents.planner import default_planner, PlannerAgent
-    from research_system.agents.search import default_search, SearchAgent
+    from research_system.core.registry import default_registry, auto_register_providers
+    from research_system.core.orchestrator import default_orchestrator
+    from research_system.services.llm_service import default_llm_service
     from research_system.models.db import default_db
     
+    # Register capabilities with the registry
+    auto_register_providers(default_registry)
+    
     # Store references to core components
-    app.state.coordinator = default_coordinator
-    app.state.planner = default_planner
-    app.state.search = default_search
+    app.state.registry = default_registry
+    app.state.orchestrator = default_orchestrator
+    app.state.llm_service = default_llm_service
     app.state.db = default_db
     
-    # Initialize LLM if enabled
+    # For backward compatibility
+    from research_system.agents.planner_refactored import default_planner
+    from research_system.agents.search_refactored import default_search
+    app.state.planner = default_planner
+    app.state.search = default_search
+    
+    # Initialize LLM if enabled (sets up the LLM client using config)
     init_llm(app, config)
 
 def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
@@ -183,7 +197,19 @@ def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
         
         # Get LLM settings
         ollama_model = llm_config.get("model", "gemma3:1b")
-        ollama_url = llm_config.get("url", "http://localhost:11434")
+        ollama_url = llm_config.get("url")
+        
+        # Use default URL if not set in config
+        if ollama_url is None:
+            # Try to detect Kubernetes service or fallback to localhost
+            if os.getenv("KUBERNETES_SERVICE_HOST"):
+                # In Kubernetes, try to use the ollama service
+                ollama_url = "http://ollama-service:11434"
+                logger.info(f"Detected Kubernetes environment, using Ollama URL: {ollama_url}")
+            else:
+                ollama_url = "http://localhost:11434"
+                logger.info(f"Using default Ollama URL: {ollama_url}")
+        
         timeout = llm_config.get("timeout", 120)
         
         # Initialize LLM client
@@ -211,7 +237,7 @@ def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
         # Register with coordinator
         app.state.coordinator.register_agent({
             "name": "ollama",
-            "server_url": "http://localhost:8080",
+            "server_url": os.getenv("OLLAMA_SERVICE_URL", "http://localhost:8080"),
             "description": "LLM agent for generating text and embeddings",
             "tools": [
                 "generate_completion", 

@@ -4,10 +4,24 @@ metadata:
   name: research-system-config
 data:
   config.yaml: |
+    app:
+      port: 8181
+      max_workers: 4
+      cors:
+        allow_origins: ["*"]
+        allow_methods: ["*"]
+        allow_headers: ["*"]
+        
+    logging:
+      level: INFO
+      
+    environment: production
+    
     database:
       use_postgres: true
+      type: postgres
       postgres:
-        host: postgres
+        host: postgres-service
         port: 5432
         dbname: research
         user: postgres
@@ -25,16 +39,37 @@ data:
     brave_search:
       endpoint: https://api.search.brave.com/res/v1/web/search
       max_results: 10
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: research-system-env
+data:
+  # New standardized environment variables
+  RESEARCH_ENV_MODE: "production"
+  RESEARCH_APP_PORT: "8181"
+  RESEARCH_LOG_LEVEL: "INFO"
+  RESEARCH_DB_USE_POSTGRES: "true"
+  RESEARCH_DB_HOST: "postgres-service"
+  RESEARCH_DB_PORT: "5432"
+  RESEARCH_DB_NAME: "research"
+  RESEARCH_LLM_ENABLED: "true"
+  RESEARCH_LLM_MODEL: "gemma3:1b"
+  RESEARCH_LLM_URL: "http://ollama-service:11434"
   
-  # Application settings
-  app.env: |
-    DEBUG=false
-    LOG_LEVEL=info
-    SERVER_HOST=0.0.0.0
-    SERVER_PORT=8181
-    API_TIMEOUT=30
-    CORS_ORIGINS=*
-    OLLAMA_URL=http://ollama-service:11434
-    OLLAMA_MODEL=gemma3:1b
-    PLANNER_LLM_MODEL=gemma3:1b
-    SEARCH_LLM_MODEL=gemma3:1b
+  # Legacy environment variables (for backward compatibility)
+  PORT: "8181"
+  LOG_LEVEL: "INFO"
+  ENV_MODE: "production"
+  USE_POSTGRES: "true"
+  POSTGRES_SERVICE_HOST: "postgres-service"
+  POSTGRES_SERVICE_PORT: "5432"
+  POSTGRES_DB: "research"
+  OLLAMA_URL: "http://ollama-service:11434"
+  OLLAMA_MODEL: "gemma3:1b"
+  SERVER_HOST: "0.0.0.0"
+  API_TIMEOUT: "30"
+  CORS_ORIGINS: "*"
+  PLANNER_LLM_MODEL: "gemma3:1b"
+  SEARCH_LLM_MODEL: "gemma3:1b"

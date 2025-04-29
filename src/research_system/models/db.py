@@ -1113,25 +1113,38 @@ class Database:
     the appropriate backend (TinyDB or PostgreSQL) based on environment configuration.
     """
     
-    def __init__(self, db_path: str = "./data/research.json", connection_string: Optional[str] = None):
+    def __init__(self, db_path: str = "./data/research.json", connection_string: Optional[str] = None, config: Optional[Dict[str, Any]] = None):
         """
         Initialize the database with the appropriate backend.
         
         Args:
             db_path: The path to the TinyDB database file (used in development).
             connection_string: The PostgreSQL connection string (used in production).
-                              If not provided, it will check the DATABASE_URL environment variable.
+                              If not provided, it will check the config or DATABASE_URL.
+            config: Optional configuration dictionary from the central config system.
         """
+        from research_system.config import get_database_config
+        
+        # Use provided config or load a new one
+        if config is None:
+            # Import here to avoid circular imports
+            from research_system.config import load_config
+            config = load_config()
+        
+        # Get database configuration
+        db_config = get_database_config(config)
+        
         # Determine which database backend to use
-        use_postgres = os.getenv("USE_POSTGRES", "false").lower() in ("true", "1", "yes")
-        db_url = connection_string or os.getenv("DATABASE_URL", "")
+        use_postgres = db_config.get("use_postgres", False)
+        db_url = connection_string or db_config.get("connection_string") or os.getenv("DATABASE_URL", "")
+        db_path = db_path or db_config.get("path", "./data/research.json")
         
         if use_postgres or db_url:
             try:
                 # Try to import psycopg2 to see if it's available
                 import psycopg2
                 try:
-                    self.db = PostgreSQLDatabase(connection_string)
+                    self.db = PostgreSQLDatabase(db_url)
                     logger.info("Using PostgreSQL database backend")
                 except psycopg2.OperationalError as e:
                     logger.warning(f"PostgreSQL connection failed: {e}, falling back to TinyDB")
@@ -1140,7 +1153,7 @@ class Database:
                 logger.warning("psycopg2 not available, falling back to TinyDB")
                 self.db = TinyDBDatabase(db_path)
         else:
-            logger.info("Using TinyDB database backend")
+            logger.info(f"Using TinyDB database backend with path: {db_path}")
             self.db = TinyDBDatabase(db_path)
     
     # Delegate all method calls to the selected backend
