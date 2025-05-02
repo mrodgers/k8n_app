@@ -5,7 +5,7 @@ metadata:
   labels:
     app: research-system
     app.kubernetes.io/name: research-system
-    app.kubernetes.io/version: "${RESEARCH_SYSTEM_VERSION:-1.0.0}"
+    app.kubernetes.io/version: "1.0.3"
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: research-platform
 spec:
@@ -18,19 +18,19 @@ spec:
       labels:
         app: research-system
     spec:
-      initContainers:
-      - name: wait-for-ollama
-        image: busybox:1.28
-        command: ['sh', '-c', 'until wget -q -O - http://ollama-service:11434/api/version; do echo "Waiting for Ollama service..."; sleep 2; done;']
+      # Commenting out for test
+      # initContainers:
+      # - name: wait-for-ollama
+      #   image: busybox:1.28
+      #   command: ['sh', '-c', 'until wget -q -O - http://ollama-service:11434/api/version; do echo "Waiting for Ollama service..."; sleep 2; done;']
       containers:
       - name: research-system
-        image: ${RESEARCH_SYSTEM_IMAGE:-research-system:latest}
+        image: alpine:latest
         imagePullPolicy: IfNotPresent
+        command: ["sh", "-c", "sleep 3600"]
         env:
         - name: RESEARCH_SYSTEM_VERSION
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.labels.app.kubernetes.io/version
+          value: "1.0.3"
         - name: CONFIG_PATH
           value: "/app/config/config.yaml"
         - name: RESEARCH_DB_PASSWORD
