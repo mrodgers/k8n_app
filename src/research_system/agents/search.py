@@ -79,15 +79,25 @@ class SearchAgent(AgentInterface):
             config = load_config()
         self.config = config
         
-        # Configure Brave Search API from centralized config
+        # Configure Brave Search API from centralized config or environment variables
         brave_config = self.config.get("brave_search", {})
-        self.api_key = brave_config.get("api_key")
+        search_config = self.config.get("search", {})
+
+        # Try to get the API key from various possible locations
+        self.api_key = (
+            brave_config.get("api_key") or
+            search_config.get("brave_api_key") or
+            os.getenv("BRAVE_SEARCH_API_KEY")
+        )
+
         self.endpoint = brave_config.get("endpoint", "https://api.search.brave.com/res/v1/web/search")
         self.max_results = brave_config.get("max_results", 10)
-        
+
         # Ensure API key is available
         if not self.api_key:
             logger.warning(f"Brave Search API key not provided for {name} agent")
+        else:
+            logger.info(f"Brave Search API key loaded for {name} agent")
         
         # LLM configuration from centralized config
         llm_config = self.config.get("llm", {})

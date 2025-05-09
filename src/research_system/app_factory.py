@@ -39,7 +39,7 @@ def create_app(config_path: Optional[str] = None, config: Optional[Dict[str, Any
     # Initialize FastAPI app
     app = FastAPI(
         title="Research System API",
-        description="API for managing research tasks, plans, and search operations",
+        description="API for managing research tasks, plans, document verification, and search operations",
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
@@ -47,6 +47,7 @@ def create_app(config_path: Optional[str] = None, config: Optional[Dict[str, Any
             {"name": "Health", "description": "Health and status check endpoints"},
             {"name": "Tasks", "description": "Research task management endpoints"},
             {"name": "Results", "description": "Research results endpoints"},
+            {"name": "Documents", "description": "Document management and verification endpoints"},
             {"name": "LLM", "description": "Large Language Model integration endpoints"},
         ]
     )
@@ -126,21 +127,29 @@ def register_routes(app: FastAPI) -> None:
     from research_system.routes.results import router as results_router
     from research_system.routes.llm import router as llm_router
     from research_system.routes.research import router as research_router
-    
+
     # Include routers
     app.include_router(health_router)
     app.include_router(tasks_router)
     app.include_router(results_router)
     app.include_router(llm_router)
     app.include_router(research_router)
+
+    # Document routes are conditionally loaded below to avoid import errors when vector support is disabled
     
     # Import and setup additional modules
     from research_system.core.research import setup_research
     from research_system.core.dashboard import setup_dashboard
-    
+
     # Set up dashboard and research portal
     setup_dashboard(app)
     setup_research(app)
+
+    # Dynamically include document routes only if vector search is enabled
+    import os
+    if os.getenv("MEMORY_VECTOR_SEARCH_ENABLED", "false").lower() != "false":
+        from research_system.routes.documents import router as documents_router
+        app.include_router(documents_router)
 
 def init_components(app: FastAPI, config: Dict[str, Any]) -> None:
     """
@@ -155,15 +164,25 @@ def init_components(app: FastAPI, config: Dict[str, Any]) -> None:
     from research_system.core.orchestrator import default_orchestrator
     from research_system.services.llm_service import default_llm_service
     from research_system.models.db import default_db
-    
+
     # Register capabilities with the registry
     auto_register_providers(default_registry)
-    
+
     # Store references to core components
     app.state.registry = default_registry
     app.state.orchestrator = default_orchestrator
     app.state.llm_service = default_llm_service
     app.state.db = default_db
+
+    # Only include document system if vector search is enabled
+    import os
+    if os.getenv("MEMORY_VECTOR_SEARCH_ENABLED", "false").lower() != "false":
+        from research_system.models.document import default_document_storage
+        from research_system.agents.verification import default_verification_agent
+        app.state.document_storage = default_document_storage
+        app.state.verification_agent = default_verification_agent
+    else:
+        logger.info("Vector search disabled, document system not initialized")
     
     # For backward compatibility
     from research_system.agents.planner_refactored import default_planner
@@ -177,7 +196,7 @@ def init_components(app: FastAPI, config: Dict[str, Any]) -> None:
 def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
     """
     Initialize LLM components if enabled.
-    
+
     Args:
         app: FastAPI application
         config: Application configuration
@@ -185,20 +204,20 @@ def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
     # Get LLM configuration
     llm_config = config.get("llm", {})
     use_llm = llm_config.get("enabled", True)
-    
+
     if not use_llm:
         logger.info("LLM integration is disabled by configuration")
         app.state.llm_enabled = False
         return
-    
+
     try:
         # Import LLM components
         from research_system.llm import create_ollama_client, OllamaServer
-        
-        # Get LLM settings
+
+        # Get LLM settings from config (which now includes env vars)
         ollama_model = llm_config.get("model", "gemma3:1b")
         ollama_url = llm_config.get("url")
-        
+
         # Use default URL if not set in config
         if ollama_url is None:
             # Try to detect Kubernetes service or fallback to localhost
@@ -209,16 +228,23 @@ def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
             else:
                 ollama_url = "http://localhost:11434"
                 logger.info(f"Using default Ollama URL: {ollama_url}")
-        
+
+        # Add protocol if missing
+        if ollama_url and not (ollama_url.startswith("http://") or ollama_url.startswith("https://")):
+            ollama_url = f"http://{ollama_url}"
+            logger.info(f"Added protocol to Ollama URL: {ollama_url}")
+
         timeout = llm_config.get("timeout", 120)
-        
+
+        logger.info(f"Initializing Ollama client with URL: {ollama_url} and model: {ollama_model}")
+
         # Initialize LLM client
         llm_client = create_ollama_client(
             async_client=False,
             base_url=ollama_url,
             timeout=timeout
         )
-        
+
         # Initialize Ollama server
         ollama_server = OllamaServer(
             name="ollama",
@@ -228,16 +254,20 @@ def init_llm(app: FastAPI, config: Dict[str, Any]) -> None:
                 "timeout": timeout
             }
         )
-        
+
         # Store references
         app.state.llm_client = llm_client
         app.state.ollama_server = ollama_server
         app.state.llm_enabled = True
-        
+
         # Register with coordinator
+        coord_url = os.getenv("OLLAMA_SERVICE_URL", "http://localhost:8080")
+        if not (coord_url.startswith("http://") or coord_url.startswith("https://")):
+            coord_url = f"http://{coord_url}"
+
         app.state.coordinator.register_agent({
             "name": "ollama",
-            "server_url": os.getenv("OLLAMA_SERVICE_URL", "http://localhost:8080"),
+            "server_url": coord_url,
             "description": "LLM agent for generating text and embeddings",
             "tools": [
                 "generate_completion", 

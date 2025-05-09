@@ -1,39 +1,29 @@
 """
-Configuration management for the Research System.
+Centralized configuration module for the Research System.
 
-This module centralizes all configuration loading and validation, supporting:
-- Default configuration
-- File-based configuration (YAML)
-- Environment variable overrides
-- Configuration validation
-- Dotenv support for local development
-
-Usage:
-    from research_system.config import load_config
-    
-    # Load with defaults
-    config = load_config()
-    
-    # Load with specific path
-    config = load_config("/path/to/config.yaml")
-    
-    # Access configuration
-    db_config = config.get("database", {})
-    app_port = config.get("app", {}).get("port", 8181)
+This module provides functions for loading and accessing application configuration.
 """
 
 import os
 import logging
 import yaml
-from typing import Dict, Any, Optional, List
-from pydantic import BaseModel, Field, ValidationError
+from typing import Dict, Any, Optional
+from pathlib import Path
+from dotenv import load_dotenv
 
-# Try to import dotenv for local development
-try:
-    from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
-except ImportError:
-    DOTENV_AVAILABLE = False
+# Load environment variables from .env file
+env_path = Path(__file__).resolve().parents[2] / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    logger = logging.getLogger(__name__)
+    logger.info(f"Loaded environment variables from {env_path}")
+else:
+    # Try to find .env in the current directory
+    current_dir_env = Path.cwd() / '.env'
+    if current_dir_env.exists():
+        load_dotenv(dotenv_path=current_dir_env)
+        logger = logging.getLogger(__name__)
+        logger.info(f"Loaded environment variables from {current_dir_env}")
 
 # Configure logging
 logging.basicConfig(
@@ -42,324 +32,197 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Load .env file if available
-if DOTENV_AVAILABLE:
-    env_file = os.getenv("ENV_FILE", ".env")
-    if os.path.exists(env_file):
-        load_dotenv(env_file)
-        logger.info(f"Loaded environment variables from {env_file}")
+# Default configuration
+DEFAULT_CONFIG = {
+    "app": {
+        "name": "Research System",
+        "port": 8080,
+        "debug": False
+    },
+    "database": {
+        "use_postgres": False,
+        "postgres_host": "localhost",
+        "postgres_port": 5432,
+        "postgres_db": "research",
+        "postgres_user": "postgres",
+        "postgres_password": "postgres",
+        "tinydb_path": "./data/research.json"
+    },
+    "memory": {
+        "consolidation_interval": 3600,  # 1 hour
+        "vector_search_enabled": False
+    }
+}
 
-# Configuration schema models for validation
-class DatabaseConfig(BaseModel):
-    """Database configuration schema."""
-    type: str = "tinydb"
-    path: Optional[str] = "data/research.json"
-    use_postgres: bool = False
-    postgres: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    connection_string: Optional[str] = None
-
-class LLMConfig(BaseModel):
-    """LLM configuration schema."""
-    enabled: bool = True
-    model: str = "gemma3:1b"
-    timeout: int = 120
-    url: Optional[str] = None
-
-class LoggingConfig(BaseModel):
-    """Logging configuration schema."""
-    level: str = "INFO"
-    format: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    output: Optional[str] = None
-
-class AppConfig(BaseModel):
-    """Application configuration schema."""
-    port: int = 8181
-    max_workers: int = 4
-    cors: Dict[str, List[str]] = Field(
-        default_factory=lambda: {
-            "allow_origins": ["*"],
-            "allow_methods": ["*"],
-            "allow_headers": ["*"]
-        }
-    )
-
-class BraveSearchConfig(BaseModel):
-    """Brave Search API configuration schema."""
-    api_key: Optional[str] = None
-    max_results: int = 10
-    endpoint: str = "https://api.search.brave.com/res/v1/web/search"
-
-class RootConfig(BaseModel):
-    """Root configuration schema."""
-    app: AppConfig = Field(default_factory=AppConfig)
-    logging: LoggingConfig = Field(default_factory=LoggingConfig)
-    environment: str = "development"
-    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
-    llm: LLMConfig = Field(default_factory=LLMConfig)
-    brave_search: BraveSearchConfig = Field(default_factory=BraveSearchConfig)
-
-def load_defaults() -> Dict[str, Any]:
-    """Load default configuration values."""
-    # Create default config using the pydantic models
-    return RootConfig().model_dump()
-
-def load_from_file(config_path: str) -> Dict[str, Any]:
-    """Load configuration from YAML file."""
-    try:
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f) or {}
-    except Exception as e:
-        logger.warning(f"Failed to load configuration from {config_path}: {e}")
-        return {}
-
-def load_from_env() -> Dict[str, Any]:
-    """
-    Load configuration from environment variables.
-    
-    Environment variable naming convention:
-    - RESEARCH_APP_PORT: App port
-    - RESEARCH_APP_MAX_WORKERS: App max workers
-    - RESEARCH_LOG_LEVEL: Logging level
-    - RESEARCH_ENV_MODE: Environment mode
-    - RESEARCH_DB_TYPE: Database type (tinydb or postgres)
-    - RESEARCH_DB_PATH: TinyDB database path
-    - RESEARCH_DB_USE_POSTGRES: Use PostgreSQL (true/false)
-    - RESEARCH_DB_URL: PostgreSQL connection URL
-    - RESEARCH_DB_HOST: PostgreSQL host
-    - RESEARCH_DB_PORT: PostgreSQL port
-    - RESEARCH_DB_NAME: PostgreSQL database name
-    - RESEARCH_DB_USER: PostgreSQL username
-    - RESEARCH_DB_PASSWORD: PostgreSQL password
-    - RESEARCH_LLM_ENABLED: Enable LLM (true/false)
-    - RESEARCH_LLM_MODEL: LLM model name
-    - RESEARCH_LLM_URL: LLM API URL
-    - RESEARCH_LLM_TIMEOUT: LLM timeout in seconds
-    - RESEARCH_BRAVE_API_KEY: Brave Search API key
-    """
-    config = {}
-    
-    # App configuration
-    if os.getenv("RESEARCH_APP_PORT") or os.getenv("PORT"):
-        _ensure_dict_path(config, ["app"])
-        config["app"]["port"] = int(os.getenv("RESEARCH_APP_PORT") or os.getenv("PORT", 8181))
-    
-    if os.getenv("RESEARCH_APP_MAX_WORKERS") or os.getenv("MAX_WORKERS"):
-        _ensure_dict_path(config, ["app"])
-        config["app"]["max_workers"] = int(os.getenv("RESEARCH_APP_MAX_WORKERS") or os.getenv("MAX_WORKERS", 4))
-    
-    # Logging configuration
-    if os.getenv("RESEARCH_LOG_LEVEL") or os.getenv("LOG_LEVEL"):
-        _ensure_dict_path(config, ["logging"])
-        config["logging"]["level"] = os.getenv("RESEARCH_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO")
-    
-    # Environment setting
-    if os.getenv("RESEARCH_ENV_MODE") or os.getenv("ENV_MODE"):
-        config["environment"] = os.getenv("RESEARCH_ENV_MODE") or os.getenv("ENV_MODE", "development")
-    
-    # Database configuration
-    if os.getenv("RESEARCH_DB_TYPE"):
-        _ensure_dict_path(config, ["database"])
-        config["database"]["type"] = os.getenv("RESEARCH_DB_TYPE")
-    
-    if os.getenv("RESEARCH_DB_PATH") or os.getenv("DB_TINYDB_PATH"):
-        _ensure_dict_path(config, ["database"])
-        config["database"]["path"] = os.getenv("RESEARCH_DB_PATH") or os.getenv("DB_TINYDB_PATH", "data/research.json")
-    
-    if os.getenv("RESEARCH_DB_USE_POSTGRES") or os.getenv("USE_POSTGRES") or os.getenv("DB_USE_POSTGRES"):
-        _ensure_dict_path(config, ["database"])
-        use_postgres = os.getenv("RESEARCH_DB_USE_POSTGRES") or os.getenv("USE_POSTGRES") or os.getenv("DB_USE_POSTGRES", "false")
-        config["database"]["use_postgres"] = use_postgres.lower() in ("true", "1", "yes", "y")
-    
-    # PostgreSQL connection URL (highest priority for DB config)
-    if os.getenv("RESEARCH_DB_URL") or os.getenv("DATABASE_URL"):
-        _ensure_dict_path(config, ["database"])
-        config["database"]["connection_string"] = os.getenv("RESEARCH_DB_URL") or os.getenv("DATABASE_URL")
-        config["database"]["use_postgres"] = True
-    
-    # Individual PostgreSQL settings
-    if os.getenv("RESEARCH_DB_HOST") or os.getenv("DB_POSTGRES_HOST") or os.getenv("POSTGRES_SERVICE_HOST"):
-        _ensure_dict_path(config, ["database", "postgres"])
-        config["database"]["postgres"]["host"] = (
-            os.getenv("RESEARCH_DB_HOST") or 
-            os.getenv("DB_POSTGRES_HOST") or 
-            os.getenv("POSTGRES_SERVICE_HOST", "localhost")
-        )
-    
-    if os.getenv("RESEARCH_DB_PORT") or os.getenv("DB_POSTGRES_PORT") or os.getenv("POSTGRES_SERVICE_PORT"):
-        _ensure_dict_path(config, ["database", "postgres"])
-        config["database"]["postgres"]["port"] = int(
-            os.getenv("RESEARCH_DB_PORT") or 
-            os.getenv("DB_POSTGRES_PORT") or 
-            os.getenv("POSTGRES_SERVICE_PORT", 5432)
-        )
-    
-    if os.getenv("RESEARCH_DB_NAME") or os.getenv("DB_POSTGRES_DBNAME") or os.getenv("POSTGRES_DB"):
-        _ensure_dict_path(config, ["database", "postgres"])
-        config["database"]["postgres"]["dbname"] = (
-            os.getenv("RESEARCH_DB_NAME") or 
-            os.getenv("DB_POSTGRES_DBNAME") or 
-            os.getenv("POSTGRES_DB", "research")
-        )
-    
-    if os.getenv("RESEARCH_DB_USER") or os.getenv("DB_POSTGRES_USER") or os.getenv("POSTGRES_USER"):
-        _ensure_dict_path(config, ["database", "postgres"])
-        config["database"]["postgres"]["user"] = (
-            os.getenv("RESEARCH_DB_USER") or 
-            os.getenv("DB_POSTGRES_USER") or 
-            os.getenv("POSTGRES_USER", "postgres")
-        )
-    
-    if os.getenv("RESEARCH_DB_PASSWORD") or os.getenv("DB_POSTGRES_PASSWORD") or os.getenv("POSTGRES_PASSWORD"):
-        _ensure_dict_path(config, ["database", "postgres"])
-        config["database"]["postgres"]["password"] = (
-            os.getenv("RESEARCH_DB_PASSWORD") or 
-            os.getenv("DB_POSTGRES_PASSWORD") or 
-            os.getenv("POSTGRES_PASSWORD", "postgres")
-        )
-    
-    # LLM configuration
-    if os.getenv("RESEARCH_LLM_ENABLED"):
-        _ensure_dict_path(config, ["llm"])
-        config["llm"]["enabled"] = os.getenv("RESEARCH_LLM_ENABLED").lower() in ("true", "1", "yes", "y")
-    
-    if os.getenv("RESEARCH_LLM_MODEL") or os.getenv("OLLAMA_MODEL"):
-        _ensure_dict_path(config, ["llm"])
-        config["llm"]["model"] = os.getenv("RESEARCH_LLM_MODEL") or os.getenv("OLLAMA_MODEL", "gemma3:1b")
-    
-    if os.getenv("RESEARCH_LLM_URL") or os.getenv("OLLAMA_URL"):
-        _ensure_dict_path(config, ["llm"])
-        config["llm"]["url"] = os.getenv("RESEARCH_LLM_URL") or os.getenv("OLLAMA_URL")
-    
-    if os.getenv("RESEARCH_LLM_TIMEOUT"):
-        _ensure_dict_path(config, ["llm"])
-        config["llm"]["timeout"] = int(os.getenv("RESEARCH_LLM_TIMEOUT", 120))
-    
-    # Brave Search configuration
-    if os.getenv("RESEARCH_BRAVE_API_KEY") or os.getenv("BRAVE_SEARCH_API_KEY"):
-        _ensure_dict_path(config, ["brave_search"])
-        config["brave_search"]["api_key"] = os.getenv("RESEARCH_BRAVE_API_KEY") or os.getenv("BRAVE_SEARCH_API_KEY")
-    
-    return config
-
-def _ensure_dict_path(config: Dict[str, Any], path: list) -> None:
-    """Ensure that a nested dictionary path exists."""
-    current = config
-    for key in path:
-        if key not in current:
-            current[key] = {}
-        current = current[key]
-
-def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Deep merge two dictionaries. 
-    If the same key exists in both dictionaries and both values are dictionaries,
-    the values are merged recursively.
-    """
-    for key, value in source.items():
-        if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-            deep_merge(target[key], value)
-        else:
-            target[key] = value
-    return target
-
-def validate_config(config: Dict[str, Any]) -> bool:
-    """
-    Validate configuration using Pydantic models.
-    
-    Args:
-        config: Configuration dictionary to validate
-    
-    Returns:
-        bool: True if configuration is valid, False otherwise
-    """
-    try:
-        # Validate using Pydantic model
-        RootConfig(**config)
-        return True
-    except ValidationError as e:
-        logger.error(f"Configuration validation failed: {e}")
-        return False
 
 def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     """
-    Load configuration with priority: env vars > config file > defaults.
+    Load configuration from file or environment.
     
     Args:
-        config_path: Path to configuration file (optional)
+        config_path: Path to YAML configuration file (optional).
         
     Returns:
-        Dict[str, Any]: Complete configuration dictionary
+        Dictionary containing configuration.
     """
-    # Start with defaults
-    config = load_defaults()
+    config = DEFAULT_CONFIG.copy()
     
-    # Override with file config if available
-    if config_path is None:
-        config_path = os.getenv("CONFIG_PATH", "config.yaml")
-    
-    if os.path.exists(config_path):
-        file_config = load_from_file(config_path)
-        deep_merge(config, file_config)
+    # Load from file if provided
+    if config_path and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as file:
+                file_config = yaml.safe_load(file)
+                if file_config:
+                    _deep_update(config, file_config)
+            logger.info(f"Loaded configuration from {config_path}")
+        except Exception as e:
+            logger.error(f"Error loading configuration from {config_path}: {e}")
     
     # Override with environment variables
-    env_config = load_from_env()
-    deep_merge(config, env_config)
-    
-    # Validate configuration
-    is_valid = validate_config(config)
-    if not is_valid:
-        logger.warning("Configuration has validation issues, using anyway with defaults where needed")
-    
-    # Set log level based on configuration
-    log_level = config.get("logging", {}).get("level", "INFO").upper()
-    logging.getLogger().setLevel(getattr(logging, log_level))
+    _update_from_env(config)
     
     return config
 
-def get_database_config(config: Dict[str, Any]) -> Dict[str, Any]:
+
+def get_database_config(config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Extract database-specific configuration.
+    Get database configuration.
     
     Args:
-        config: The complete configuration dictionary
+        config: Optional configuration dictionary. If not provided, will load from default config.
         
     Returns:
-        Dict[str, Any]: Database-specific configuration
+        Dictionary containing database configuration.
     """
-    db_config = config.get("database", {})
+    if config is None:
+        config = load_config()
     
-    # If PostgreSQL is enabled and no connection string is provided, build one
-    if db_config.get("use_postgres") and not db_config.get("connection_string"):
-        pg_config = db_config.get("postgres", {})
-        host = pg_config.get("host", "localhost")
-        port = pg_config.get("port", 5432)
-        dbname = pg_config.get("dbname", "research")
-        user = pg_config.get("user", "postgres")
-        password = pg_config.get("password", "postgres")
+    db_config = config.get("database", {}).copy()
+    
+    # Build connection string if using PostgreSQL
+    if db_config.get("use_postgres", False):
+        host = db_config.get("postgres_host", "localhost")
+        port = db_config.get("postgres_port", 5432)
+        dbname = db_config.get("postgres_db", "research")
+        user = db_config.get("postgres_user", "postgres")
+        password = db_config.get("postgres_password", "postgres")
         
-        # Build and store connection string
-        connection_string = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
-        db_config["connection_string"] = connection_string
+        db_config["connection_string"] = f"postgresql://{user}:{password}@{host}:{port}/{dbname}"
     
     return db_config
 
-def get_env_name() -> str:
+
+def _deep_update(base: Dict[str, Any], update: Dict[str, Any]) -> None:
     """
-    Get the current environment name.
+    Recursively update a dictionary with another dictionary.
     
-    Returns:
-        str: Environment name (development, testing, production)
+    Args:
+        base: Base dictionary to update
+        update: Dictionary with updates to apply
     """
-    return os.getenv("RESEARCH_ENV_MODE", os.getenv("ENV_MODE", "development"))
+    for key, value in update.items():
+        if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+            _deep_update(base[key], value)
+        else:
+            base[key] = value
+
+
+def _update_from_env(config: Dict) -> None:
+    """
+    Update configuration with environment variables.
+
+    Args:
+        config: Configuration dictionary to update.
+    """
+    # App configuration
+    if "PORT" in os.environ:
+        config["app"]["port"] = int(os.environ["PORT"])
+
+    if "SERVER_PORT" in os.environ:
+        config["app"]["port"] = int(os.environ["SERVER_PORT"])
+
+    if "DEBUG" in os.environ:
+        config["app"]["debug"] = os.environ["DEBUG"].lower() == "true"
+
+    # Database configuration
+    if "DB_USE_POSTGRES" in os.environ or "USE_POSTGRES" in os.environ:
+        use_postgres = os.environ.get("DB_USE_POSTGRES", os.environ.get("USE_POSTGRES"))
+        config["database"]["use_postgres"] = use_postgres.lower() == "true"
+
+    if "POSTGRES_HOST" in os.environ or "DB_POSTGRES_HOST" in os.environ:
+        config["database"]["postgres_host"] = os.environ.get("DB_POSTGRES_HOST", os.environ.get("POSTGRES_HOST", "localhost"))
+
+    if "POSTGRES_PORT" in os.environ or "DB_POSTGRES_PORT" in os.environ:
+        port_str = os.environ.get("DB_POSTGRES_PORT", os.environ.get("POSTGRES_PORT", "5432"))
+        config["database"]["postgres_port"] = int(port_str)
+
+    if "POSTGRES_DB" in os.environ or "DB_POSTGRES_DBNAME" in os.environ:
+        config["database"]["postgres_db"] = os.environ.get("DB_POSTGRES_DBNAME", os.environ.get("POSTGRES_DB", "research"))
+
+    if "POSTGRES_USER" in os.environ or "DB_POSTGRES_USER" in os.environ:
+        config["database"]["postgres_user"] = os.environ.get("DB_POSTGRES_USER", os.environ.get("POSTGRES_USER", "postgres"))
+
+    if "POSTGRES_PASSWORD" in os.environ or "DB_POSTGRES_PASSWORD" in os.environ:
+        config["database"]["postgres_password"] = os.environ.get("DB_POSTGRES_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "postgres"))
+
+    if "TINYDB_PATH" in os.environ:
+        config["database"]["tinydb_path"] = os.environ["TINYDB_PATH"]
+
+    # Database URL (overrides individual settings)
+    if "DATABASE_URL" in os.environ:
+        db_url = os.environ["DATABASE_URL"]
+        # If this is set, ensure use_postgres is True
+        if db_url.startswith("postgresql"):
+            config["database"]["use_postgres"] = True
+            config["database"]["connection_string"] = db_url
+
+    # Memory configuration
+    if "MEMORY_CONSOLIDATION_INTERVAL" in os.environ:
+        config["memory"]["consolidation_interval"] = int(os.environ["MEMORY_CONSOLIDATION_INTERVAL"])
+
+    if "MEMORY_VECTOR_SEARCH_ENABLED" in os.environ:
+        config["memory"]["vector_search_enabled"] = os.environ["MEMORY_VECTOR_SEARCH_ENABLED"].lower() == "true"
+
+    # LLM configuration
+    if "llm" not in config:
+        config["llm"] = {}
+
+    if "OLLAMA_URL" in os.environ:
+        config["llm"]["url"] = os.environ["OLLAMA_URL"]
+
+    if "OLLAMA_MODEL" in os.environ:
+        config["llm"]["model"] = os.environ["OLLAMA_MODEL"]
+
+    if "PLANNER_LLM_MODEL" in os.environ:
+        config["llm"]["planner_model"] = os.environ["PLANNER_LLM_MODEL"]
+
+    if "SEARCH_LLM_MODEL" in os.environ:
+        config["llm"]["search_model"] = os.environ["SEARCH_LLM_MODEL"]
+
+    if "USE_LLM" in os.environ:
+        config["llm"]["enabled"] = os.environ["USE_LLM"].lower() == "true"
+
+    # Search configuration
+    if "search" not in config:
+        config["search"] = {}
+
+    if "BRAVE_SEARCH_API_KEY" in os.environ:
+        config["search"]["brave_api_key"] = os.environ["BRAVE_SEARCH_API_KEY"]
 
 def is_development() -> bool:
-    """Check if running in development environment."""
-    return get_env_name().lower() in ("dev", "development", "local")
+    """
+    Check if the application is running in development mode.
+    
+    Returns:
+        True if in development mode, False otherwise.
+    """
+    return get_env_name() == "development"
 
-def is_testing() -> bool:
-    """Check if running in testing environment."""
-    return get_env_name().lower() in ("test", "testing")
-
-def is_production() -> bool:
-    """Check if running in production environment."""
-    return get_env_name().lower() in ("prod", "production")
+def get_env_name() -> str:
+    """
+    Get the environment name.
+    
+    Returns:
+        The environment name (development, staging, production).
+    """
+    return os.getenv("ENV_NAME", "development").lower()
