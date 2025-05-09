@@ -1,24 +1,40 @@
 # Research System Dashboard Prototype
 
-This is a simple MVP prototype for visualizing and managing the Research System components using Podman.
+This is a lightweight dashboard for monitoring and managing containers in the Research System.
 
 ## Features
 
-- View all containers and their status
+- View all containers and their statuses
 - Start, stop, and restart containers
 - View container logs
-- Real-time system metrics via WebSocket
-- Environment variable management
+- Simple and responsive UI for easy management
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.7+
+- FastAPI and Uvicorn
 - Podman installed and running
 - The Research System containers running via Podman
 
 ## Quick Start
 
-### Local Development
+### Using the Simple Dashboard (Recommended)
+
+1. Start the dashboard with the provided script:
+
+```bash
+./start_dashboard.sh
+```
+
+2. Open your browser at [http://localhost:8299](http://localhost:8299)
+
+3. Stop the dashboard when finished:
+
+```bash
+./stop_dashboard.sh
+```
+
+### Local Development Mode
 
 1. Install dependencies:
 
@@ -26,15 +42,15 @@ This is a simple MVP prototype for visualizing and managing the Research System 
 pip install -r requirements.txt
 ```
 
-2. Run the dashboard:
+2. Run the direct dashboard:
 
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8080
+python direct_dashboard.py
 ```
 
-3. Open your browser at [http://localhost:8080](http://localhost:8080)
+3. Open your browser at [http://localhost:8199](http://localhost:8199)
 
-### Running in a Container
+### Running in a Container (Advanced)
 
 1. Build the dashboard container:
 
@@ -47,65 +63,67 @@ podman build -t system-dashboard .
 ```bash
 podman run -d --name system-dashboard \
   -v /run/podman/podman.sock:/run/podman/podman.sock \
-  -p 8080:8080 \
+  -p 8199:8199 \
   system-dashboard
 ```
 
-3. Open your browser at [http://localhost:8080](http://localhost:8080)
+3. Open your browser at [http://localhost:8199](http://localhost:8199)
 
 ## API Endpoints
 
-The dashboard exposes the following API endpoints:
+The direct dashboard exposes the following API endpoints:
 
 - `GET /containers` - List all containers
 - `GET /containers/{container_id}` - Get detailed information about a container
 - `POST /containers/{container_id}/action` - Perform an action on a container
 - `GET /containers/{container_id}/logs` - Get logs from a container
-- `GET /containers/{container_id}/stats` - Get real-time statistics for a container
-- `GET /system/info` - Get system-wide information
-- `GET /images` - List all images
-- `GET /env` - Get all environment variables
-- `PUT /env` - Update an environment variable
+- `GET /debug/containers` - Debug view of container data
 
-## WebSocket API
+## Available Dashboard Versions
 
-Connect to `/ws` to receive real-time container statistics.
+- `direct_dashboard.py` - Simple version that directly uses Podman CLI commands (recommended)
+- `main_direct.py` - WebSocket-enabled dashboard with more features
+- `main.py` - Original prototype using Podman socket API
 
-## Integration with podman-compose
+## Troubleshooting
 
-To include the dashboard in your podman-compose.yml file:
+If you encounter issues with the dashboard:
 
-```yaml
-services:
-  # ... other services ...
+1. Check if containers are visible via command line:
+   ```bash
+   podman ps -a
+   ```
 
-  system-dashboard:
-    image: system-dashboard:latest
-    container_name: system-dashboard
-    volumes:
-      - /run/podman/podman.sock:/run/podman/podman.sock
-    ports:
-      - "8080:8080"
-    restart: unless-stopped
-```
+2. Verify the dashboard logs for errors:
+   ```bash
+   cat dashboard.log
+   ```
+
+3. Check if the port is available:
+   ```bash
+   lsof -i :8199
+   ```
+
+4. Access the debug endpoint for raw container data:
+   ```
+   http://localhost:8199/debug/containers
+   ```
+
+5. Make sure you have the right permissions to run Podman commands
 
 ## Security Considerations
 
-This prototype is designed for local development and testing. For production use, consider:
+This prototype is designed for local development and testing only. For production use, consider:
 
 1. Adding authentication
 2. Implementing HTTPS
-3. Using volume mounts for sensitive data rather than environment variables
-4. Implementing proper access control for the Podman socket
+3. Implementing proper access control
 
-## Next Steps
+## Technical Notes
 
-This prototype demonstrates the core functionality needed for a system dashboard. To develop this into a production-ready solution:
-
-1. Enhance the frontend with a modern framework like Vue.js or React
-2. Add authentication and authorization
-3. Implement more sophisticated visualizations (graphs, topology views)
-4. Add alerting and notification capabilities
-5. Implement comprehensive system metrics collection
+- The dashboard uses Podman CLI commands directly rather than the socket API for better compatibility
+- API responses are normalized to handle different Podman output formats
+- The dashboard automatically parses standard Podman table output if JSON format fails
+- Container actions include start, stop, and restart operations
 
 See the full design in the [SYSTEM_DASHBOARD_MVP.md](../../docs/SYSTEM_DASHBOARD_MVP.md) document.

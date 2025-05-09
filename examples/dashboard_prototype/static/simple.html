@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Research System Container Dashboard (Simple)</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            background-color: #f5f7fa;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            margin-bottom: 20px;
+        }
+        
+        .container-card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            padding: 15px;
+            border-left: 4px solid #ddd;
+        }
+        
+        .running {
+            border-left-color: #2ecc71;
+        }
+        
+        .exited {
+            border-left-color: #e74c3c;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .running .status-badge {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .exited .status-badge {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            margin-right: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        
+        .btn-success {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        h1, h2, h3 {
+            margin-top: 0;
+        }
+        
+        .refresh-button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+        
+        .debug-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        
+        .container-json {
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            margin-top: 10px;
+            overflow: auto;
+            max-height: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>Research System Container Dashboard (Simple)</h1>
+        </div>
+    </div>
+    
+    <div class="container">
+        <button class="refresh-button" onclick="fetchContainers()">Refresh Containers</button>
+        
+        <div id="debug-info" class="debug-info">
+            <h3>Debug Information</h3>
+            <p>Loading container data...</p>
+        </div>
+        
+        <h2>Containers</h2>
+        <div id="container-list"></div>
+    </div>
+    
+    <script>
+        // Log message for debugging
+        console.log("Dashboard script loaded");
+        
+        // Fetch containers and update the UI
+        async function fetchContainers() {
+            console.log("Fetching containers...");
+            
+            try {
+                const response = await fetch('/containers');
+                console.log("Response status:", response.status);
+                
+                if (!response.ok) {
+                    console.error("Error fetching containers:", response.statusText);
+                    document.getElementById('debug-info').innerHTML = `
+                        <h3>Debug Information</h3>
+                        <p>Error fetching containers: ${response.status} ${response.statusText}</p>
+                    `;
+                    return;
+                }
+                
+                const containers = await response.json();
+                console.log("Containers data:", containers);
+                
+                // Update debug info
+                document.getElementById('debug-info').innerHTML = `
+                    <h3>Debug Information</h3>
+                    <p>Container count: ${containers ? containers.length : 0}</p>
+                    <p>API response format: ${containers ? typeof containers : 'undefined'}</p>
+                    <p>First container ID: ${containers && containers.length > 0 ? (containers[0].Id || containers[0].id || 'Unknown') : 'No containers'}</p>
+                    <p>First container names: ${containers && containers.length > 0 ? JSON.stringify(containers[0].Names || 'null') : 'No containers'}</p>
+                    <button class="btn btn-primary" onclick="window.location.href='/debug/containers'">View Raw Container Data</button>
+                `;
+                
+                const containerList = document.getElementById('container-list');
+                containerList.innerHTML = '';
+                
+                if (!containers || containers.length === 0) {
+                    containerList.innerHTML = `
+                        <div class="container-card">
+                            <h3>No Containers Found</h3>
+                            <p>No containers were found in the Podman API response.</p>
+                            <p>Try refreshing or checking the server logs.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                let runningCount = 0;
+                
+                // Display each container
+                containers.forEach(container => {
+                    console.log("Processing container:", container);
+                    
+                    // Get the status
+                    const status = container.Status || container.status || "unknown";
+                    const isRunning = status.toLowerCase().includes('running') || 
+                                    status.toLowerCase().includes('up');
+                    
+                    if (isRunning) {
+                        runningCount++;
+                    }
+                    
+                    // Get container ID
+                    const containerId = container.Id || container.id || "unknown";
+                    
+                    // Get container name
+                    let containerName = "Unknown";
+                    if (container.Names && Array.isArray(container.Names) && container.Names.length > 0) {
+                        containerName = container.Names[0];
+                    }
+                    
+                    // Create the container card
+                    const containerCard = document.createElement('div');
+                    containerCard.className = `container-card ${isRunning ? 'running' : 'exited'}`;
+                    
+                    containerCard.innerHTML = `
+                        <div class="status-badge">${status}</div>
+                        <h3>${containerName}</h3>
+                        <p><strong>ID:</strong> ${containerId.substring(0, 12)}...</p>
+                        <p><strong>Image:</strong> ${container.Image || "Unknown"}</p>
+                        <p><strong>Created:</strong> ${container.CreatedAt || "Unknown"}</p>
+                        <div class="controls">
+                            <button class="btn btn-success" onclick="containerAction('${containerId}', 'start')" ${isRunning ? 'disabled' : ''}>Start</button>
+                            <button class="btn btn-danger" onclick="containerAction('${containerId}', 'stop')" ${!isRunning ? 'disabled' : ''}>Stop</button>
+                            <button class="btn btn-primary" onclick="containerAction('${containerId}', 'restart')">Restart</button>
+                            <button class="btn btn-secondary" onclick="containerLogs('${containerId}')">Logs</button>
+                        </div>
+                        <div class="container-json">${JSON.stringify(container, null, 2)}</div>
+                    `;
+                    
+                    containerList.appendChild(containerCard);
+                });
+                
+                console.log("Containers UI updated, running count:", runningCount);
+                
+            } catch (error) {
+                console.error('Error fetching containers:', error);
+                document.getElementById('debug-info').innerHTML = `
+                    <h3>Debug Information</h3>
+                    <p>Error fetching containers: ${error.message}</p>
+                    <pre>${error.stack}</pre>
+                `;
+            }
+        }
+        
+        // Perform an action on a container
+        async function containerAction(id, action) {
+            console.log(`Container action: ${action} on ${id}`);
+            
+            try {
+                const response = await fetch(`/containers/${id}/action`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`${action} successful on container ${id.substring(0, 8)}!`);
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+                
+                // Refresh the container list
+                fetchContainers();
+                
+            } catch (error) {
+                console.error(`Error performing ${action}:`, error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Fetch logs for a container
+        async function containerLogs(id) {
+            console.log(`Fetching logs for container ${id}`);
+            
+            try {
+                const response = await fetch(`/containers/${id}/logs`);
+                const data = await response.json();
+                
+                // Create a modal-like dialog to show logs
+                const logDialog = document.createElement('div');
+                logDialog.style.position = 'fixed';
+                logDialog.style.top = '50px';
+                logDialog.style.left = '50px';
+                logDialog.style.right = '50px';
+                logDialog.style.bottom = '50px';
+                logDialog.style.backgroundColor = 'white';
+                logDialog.style.zIndex = '1000';
+                logDialog.style.padding = '20px';
+                logDialog.style.borderRadius = '5px';
+                logDialog.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+                logDialog.style.display = 'flex';
+                logDialog.style.flexDirection = 'column';
+                
+                logDialog.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <h3>Logs for Container: ${id.substring(0, 8)}...</h3>
+                        <button class="btn btn-danger" onclick="this.parentNode.parentNode.remove()">Close</button>
+                    </div>
+                    <pre style="flex: 1; overflow: auto; background-color: #2c3e50; color: white; padding: 10px; border-radius: 5px;">${data.logs || 'No logs available'}</pre>
+                `;
+                
+                document.body.appendChild(logDialog);
+                
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                alert(`Error fetching logs: ${error.message}`);
+            }
+        }
+        
+        // Initial data loading
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("DOM loaded, fetching containers");
+            fetchContainers();
+        });
+    </script>
+</body>
+</html>
