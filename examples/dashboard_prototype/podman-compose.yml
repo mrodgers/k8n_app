@@ -1,0 +1,13 @@
+version: '3'
+services:
+  system-dashboard:
+    build:
+      context: .
+    container_name: system-dashboard
+    volumes:
+      - /run/podman/podman.sock:/run/podman/podman.sock
+      # The below line is needed for the dashboard to read .env file
+      - ../../.env:/app/.env:ro
+    ports:
+      - "8090:8080"
+    restart: unless-stopped

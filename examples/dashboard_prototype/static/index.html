@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Research System Dashboard</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #333;
+            background-color: #f5f7fa;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            padding: 0 20px;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background-color: #f1f1f1;
+            padding: 15px 20px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        
+        .container-card {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .container-card:hover {
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .container-card h3 {
+            margin-top: 0;
+            padding-right: 70px;
+        }
+        
+        .status-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .running {
+            border-left: 4px solid #2ecc71;
+        }
+        
+        .running .status-badge {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .exited {
+            border-left: 4px solid #e74c3c;
+        }
+        
+        .exited .status-badge {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .created {
+            border-left: 4px solid #3498db;
+        }
+        
+        .created .status-badge {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .btn {
+            padding: 8px 12px;
+            margin-right: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-success {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background-color: #27ae60;
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+        
+        .logs-container {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            height: 300px;
+            overflow: auto;
+            white-space: pre-wrap;
+            margin-top: 10px;
+        }
+        
+        .controls {
+            margin-top: 15px;
+        }
+        
+        .select-container {
+            margin-bottom: 10px;
+        }
+        
+        select {
+            padding: 8px;
+            width: 100%;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-bottom: -1px;
+        }
+        
+        .tab.active {
+            border-color: #ddd;
+            border-bottom-color: white;
+            background-color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        
+        .refresh-button {
+            background: none;
+            border: none;
+            color: #3498db;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            margin-left: auto;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .section-header h2 {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>Research System Dashboard</h1>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="tabs">
+            <div class="tab active" data-tab="containers">Containers</div>
+            <div class="tab" data-tab="logs">Logs</div>
+            <div class="tab" data-tab="stats">System Stats</div>
+            <div class="tab" data-tab="config">Configuration</div>
+        </div>
+        
+        <div class="tab-content active" id="containers-tab">
+            <div class="section-header">
+                <h2>Containers</h2>
+                <button class="refresh-button" onclick="fetchContainers()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M23 4V10H17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M1 20V14H7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M3.51 9.00008C4.01717 7.56686 4.87913 6.28548 6.01547 5.27549C7.1518 4.2655 8.52547 3.55978 10.0083 3.22427C11.4911 2.88876 13.0348 2.93436 14.4952 3.35679C15.9556 3.77922 17.2853 4.56473 18.36 5.64008L23 10.0001M1 14.0001L5.64 18.3601C6.71475 19.4354 8.04437 20.2209 9.50481 20.6434C10.9652 21.0658 12.5089 21.1114 13.9917 20.7759C15.4745 20.4404 16.8482 19.7347 17.9845 18.7247C19.1209 17.7147 19.9828 16.4333 20.49 15.0001" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+            
+            <div class="grid" id="container-list"></div>
+        </div>
+        
+        <div class="tab-content" id="logs-tab">
+            <div class="section-header">
+                <h2>Container Logs</h2>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <div class="select-container">
+                        <select id="container-select">
+                            <option value="">Select a container</option>
+                        </select>
+                    </div>
+                    <div class="logs-container" id="log-output">Select a container to view logs...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="stats-tab">
+            <div class="section-header">
+                <h2>System Statistics</h2>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">System Overview</div>
+                <div class="card-body">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Running Containers</div>
+                            <div class="stat-value" id="running-containers">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Containers</div>
+                            <div class="stat-value" id="total-containers">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Images</div>
+                            <div class="stat-value" id="total-images">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">System Uptime</div>
+                            <div class="stat-value" id="system-uptime">0h 0m</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top: 20px;">
+                <div class="card-header">Container Resources</div>
+                <div class="card-body" id="container-stats">
+                    <p>Connecting to container stats...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="config-tab">
+            <div class="section-header">
+                <h2>Environment Configuration</h2>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">Environment Variables</div>
+                <div class="card-body">
+                    <div id="env-vars-list">Loading environment variables...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                tab.classList.add('active');
+                document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+            });
+        });
+        
+        // Fetch containers and update the UI
+        async function fetchContainers() {
+            try {
+                const response = await fetch('/containers');
+                const containers = await response.json();
+                
+                const containerList = document.getElementById('container-list');
+                containerList.innerHTML = '';
+                
+                const containerSelect = document.getElementById('container-select');
+                // Keep the first option and remove the rest
+                while (containerSelect.options.length > 1) {
+                    containerSelect.remove(1);
+                }
+                
+                let runningCount = 0;
+                
+                containers.forEach(container => {
+                    if (container.status === 'running') {
+                        runningCount++;
+                    }
+                    
+                    // Add to container list
+                    const containerCard = document.createElement('div');
+                    containerCard.className = `container-card ${container.status}`;
+                    
+                    // Get the container name (might be in Names array or names property)
+                    const containerName = container.names ? container.names[0] : 
+                                         (container.Names ? container.Names[0] : 'Unknown');
+                    
+                    containerCard.innerHTML = `
+                        <div class="status-badge">${container.status}</div>
+                        <h3>${containerName}</h3>
+                        <p><strong>Image:</strong> ${container.image}</p>
+                        <p><strong>Created:</strong> ${new Date(container.created * 1000).toLocaleString()}</p>
+                        <div class="controls">
+                            <button class="btn btn-success" onclick="containerAction('${container.id}', 'start')" ${container.status === 'running' ? 'disabled' : ''}>Start</button>
+                            <button class="btn btn-danger" onclick="containerAction('${container.id}', 'stop')" ${container.status !== 'running' ? 'disabled' : ''}>Stop</button>
+                            <button class="btn btn-primary" onclick="containerAction('${container.id}', 'restart')" ${container.status !== 'running' ? 'disabled' : ''}>Restart</button>
+                            <button class="btn btn-secondary" onclick="showLogs('${container.id}', '${containerName}')">Logs</button>
+                        </div>
+                    `;
+                    containerList.appendChild(containerCard);
+                    
+                    // Add to container select
+                    const option = document.createElement('option');
+                    option.value = container.id;
+                    option.text = containerName;
+                    containerSelect.appendChild(option);
+                });
+                
+                // Update stats
+                document.getElementById('running-containers').textContent = runningCount;
+                document.getElementById('total-containers').textContent = containers.length;
+                
+            } catch (error) {
+                console.error('Error fetching containers:', error);
+            }
+        }
+        
+        // Perform an action on a container
+        async function containerAction(id, action) {
+            try {
+                const response = await fetch(`/containers/${id}/action`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ action })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // Refresh the container list
+                    fetchContainers();
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Show logs for a container
+        function showLogs(containerId, containerName) {
+            // Switch to logs tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            
+            document.querySelector('.tab[data-tab="logs"]').classList.add('active');
+            document.getElementById('logs-tab').classList.add('active');
+            
+            // Select the container in the dropdown
+            document.getElementById('container-select').value = containerId;
+            
+            // Fetch logs
+            fetchLogs(containerId);
+        }
+        
+        // Fetch logs for a container
+        async function fetchLogs(containerId) {
+            if (!containerId) return;
+            
+            try {
+                document.getElementById('log-output').textContent = 'Loading logs...';
+                
+                const response = await fetch(`/containers/${containerId}/logs`);
+                const data = await response.json();
+                
+                document.getElementById('log-output').textContent = data.logs || 'No logs available';
+            } catch (error) {
+                document.getElementById('log-output').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Fetch environment variables
+        async function fetchEnvVars() {
+            try {
+                const response = await fetch('/env');
+                const envVars = await response.json();
+                
+                const envVarsList = document.getElementById('env-vars-list');
+                envVarsList.innerHTML = '';
+                
+                // Create a table for environment variables
+                const table = document.createElement('table');
+                table.style.width = '100%';
+                table.style.borderCollapse = 'collapse';
+                
+                // Add header row
+                const header = document.createElement('tr');
+                header.innerHTML = `
+                    <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Variable</th>
+                    <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Value</th>
+                    <th style="text-align: left; padding: 8px; border-bottom: 1px solid #ddd;">Actions</th>
+                `;
+                table.appendChild(header);
+                
+                // Add rows for each environment variable
+                Object.entries(envVars).forEach(([key, value]) => {
+                    const row = document.createElement('tr');
+                    
+                    // Mask password and API key values
+                    let displayValue = value;
+                    if (key.toLowerCase().includes('password') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('key')) {
+                        displayValue = '••••••••';
+                    }
+                    
+                    row.innerHTML = `
+                        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${key}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #ddd;">${displayValue}</td>
+                        <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                            <button class="btn btn-secondary btn-sm" onclick="editEnvVar('${key}', '${value}')">Edit</button>
+                        </td>
+                    `;
+                    table.appendChild(row);
+                });
+                
+                envVarsList.appendChild(table);
+            } catch (error) {
+                console.error('Error fetching environment variables:', error);
+                document.getElementById('env-vars-list').textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // Edit environment variable
+        function editEnvVar(key, value) {
+            const newValue = prompt(`Edit value for ${key}:`, value);
+            if (newValue !== null) {
+                updateEnvVar(key, newValue);
+            }
+        }
+        
+        // Update environment variable
+        async function updateEnvVar(key, value) {
+            try {
+                const response = await fetch('/env', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ key, value })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert(`Updated ${key} successfully!`);
+                    fetchEnvVars();
+                } else {
+                    alert(`Error updating ${key}`);
+                }
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        // Fetch system images
+        async function fetchImages() {
+            try {
+                const response = await fetch('/images');
+                const images = await response.json();
+                
+                document.getElementById('total-images').textContent = images.length;
+            } catch (error) {
+                console.error('Error fetching images:', error);
+            }
+        }
+        
+        // Set up event listeners
+        document.getElementById('container-select').addEventListener('change', (e) => {
+            fetchLogs(e.target.value);
+        });
+        
+        // Setup WebSocket for real-time stats
+        let socket;
+        function setupWebSocket() {
+            socket = new WebSocket(`ws://${window.location.host}/ws`);
+            
+            socket.onopen = () => {
+                console.log('WebSocket connected');
+            };
+            
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'stats') {
+                    updateContainerStats(data.data);
+                }
+            };
+            
+            socket.onclose = () => {
+                console.log('WebSocket disconnected. Reconnecting in 5 seconds...');
+                setTimeout(setupWebSocket, 5000);
+            };
+            
+            socket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                socket.close();
+            };
+            
+            // Send periodic pings to keep the connection alive
+            setInterval(() => {
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send('ping');
+                }
+            }, 30000);
+        }
+        
+        // Update container stats display
+        function updateContainerStats(stats) {
+            const containerStats = document.getElementById('container-stats');
+            
+            if (!stats || stats.length === 0) {
+                containerStats.innerHTML = '<p>No container statistics available</p>';
+                return;
+            }
+            
+            let html = '<div class="grid">';
+            
+            stats.forEach(stat => {
+                // Get container name
+                const name = stat.Names && stat.Names[0] ? stat.Names[0] : 
+                             (stat.names && stat.names[0] ? stat.names[0] : stat.id.substring(0, 12));
+                
+                // Skip if not running
+                if (stat.status !== 'running') return;
+                
+                // Calculate CPU and memory usage
+                const cpuPercent = stat.cpu_stats && stat.cpu_stats.cpu_usage ? 
+                                   (stat.cpu_stats.cpu_usage.total_usage / stat.cpu_stats.system_cpu_usage * 100).toFixed(2) : 
+                                   'N/A';
+                
+                const memUsage = stat.memory_stats && stat.memory_stats.usage ? 
+                                 formatBytes(stat.memory_stats.usage) : 
+                                 'N/A';
+                
+                const memLimit = stat.memory_stats && stat.memory_stats.limit ? 
+                                 formatBytes(stat.memory_stats.limit) : 
+                                 'N/A';
+                
+                const memPercent = stat.memory_stats && stat.memory_stats.usage && stat.memory_stats.limit ? 
+                                   (stat.memory_stats.usage / stat.memory_stats.limit * 100).toFixed(2) : 
+                                   'N/A';
+                
+                html += `
+                    <div class="container-card">
+                        <h3>${name}</h3>
+                        <div class="stats-grid" style="grid-template-columns: 1fr 1fr; margin-top: 10px;">
+                            <div class="stat-card">
+                                <div class="stat-label">CPU Usage</div>
+                                <div class="stat-value">${cpuPercent}%</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-label">Memory Usage</div>
+                                <div class="stat-value">${memPercent}%</div>
+                                <div style="font-size: 12px;">${memUsage} / ${memLimit}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            containerStats.innerHTML = html;
+        }
+        
+        // Format bytes to human-readable format
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+            
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+        
+        // Calculate system uptime
+        function updateUptime() {
+            // This is just a placeholder - in a real app you'd get this from the server
+            const now = new Date();
+            const hours = now.getHours();
+            const minutes = now.getMinutes();
+            
+            document.getElementById('system-uptime').textContent = `${hours}h ${minutes}m`;
+        }
+        
+        // Initial data loading
+        fetchContainers();
+        fetchEnvVars();
+        fetchImages();
+        updateUptime();
+        setupWebSocket();
+        
+        // Set up periodic refresh for containers list
+        setInterval(fetchContainers, 30000);
+        
+        // Update uptime every minute
+        setInterval(updateUptime, 60000);
+    </script>
+</body>
+</html>
